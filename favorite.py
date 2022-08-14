@@ -2,6 +2,7 @@ import discord
 import pymongo
 import mdb
 from pprint import pprint
+from logger import printlog
 
 # favorite.py
 # Hall of Fame messages
@@ -23,12 +24,14 @@ async def update_favorite(self, payload, db):
     event_type = payload.event_type
     message = await channel.fetch_message(payload.message_id)
 
+    # TODO: Add list of members who have starred to db
+
     # Check if user is interacting with own message
     if user_id == message.author.id:
         if event_type == 'REACTION_ADD':
-            mdb.printlog("User '{0}' [id={1}] self-starred message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
+            printlog("User '{0}' [id={1}] self-starred message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
         elif event_type == 'REACTION_REMOVE':
-            mdb.printlog("User '{0}' [id={1}] removed self-star on message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
+            printlog("User '{0}' [id={1}] removed self-star on message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
         return
 
     msg = {"message_id": message.id,
@@ -56,7 +59,7 @@ async def update_favorite(self, payload, db):
     elif event_type == 'REACTION_REMOVE' and message:
         print("User [id={0}] unstarred message.".format(user_id)) # member not available on remove
     else:
-        mdb.printlog("Error occured when user '{0}' [id={1}] updated star reaction.".format(member, user_id))
+        printlog("Error occured when user '{0}' [id={1}] updated star reaction.".format(member, user_id))
 
 async def add_hall_entry(self, msg, db):
     message_id = msg['message_id']

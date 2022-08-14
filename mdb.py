@@ -1,8 +1,8 @@
 import os
-from datetime import datetime
 from pymongo import MongoClient, ReturnDocument
 from pprint import pprint
 from dotenv import load_dotenv
+from logger import printlog
 
 # mdb.py
 # MongoDB function helpers
@@ -13,16 +13,6 @@ MONGO_ADDR = os.getenv('MONGO')
 
 client = MongoClient(MONGO_ADDR)
 db = client['beta-bot']
-
-def printlog(text):
-    time = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # time w/o ms
-    print('[{0}] '.format(time) + text)
-
-async def printlog2(text, message, send_text):
-    time = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # time w/o ms
-    print('[{0}] '.format(time) + text)
-    if message and send_text:
-        await message.channel.send(send_text)
 
 async def find_document(db, target, collection, message=None, send_text=None):
     try:

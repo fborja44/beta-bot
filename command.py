@@ -2,7 +2,6 @@ import discord
 import pymongo
 import re
 import mdb
-
 from pprint import pprint
 
 # command.py
@@ -88,6 +87,7 @@ async def register_cmd(self, message, db):
     cmd_id = await mdb.add_document(db, cmd, COMMANDS)
     if cmd_id:
         msg = "Created new command '{0}' with content '{1}'.".format(cmd_name, cmd_content)
+        print("User '{0}' [id={1}] created new command '{2}'.".format(message.author.name, message.author.id, cmd_name))
     else:
         msg = "Failed to create new command."
     await message.channel.send(msg)

@@ -3,6 +3,7 @@ import logging
 import command
 import favorite
 import os
+from colorama import Fore, Back, Style
 from pprint import pprint
 from pymongo import MongoClient
 from dotenv import load_dotenv
@@ -15,8 +16,8 @@ load_dotenv()
 TOKEN = os.getenv('TOKEN')
 MONGO_ADDR = os.getenv('MONGO')
 
-print("Starting beta-bot...")
-print("========================================")
+print(Fore.CYAN + "Starting beta-bot..." + Style.RESET_ALL)
+print(Fore.MAGENTA + "============================================" + Style.RESET_ALL)
 
 # Add logs to discord.log
 logger = logging.getLogger('discord')
@@ -31,7 +32,7 @@ db = db_client['beta-bot']
 # Debugging: serverStatus
 serverStatusResult = db.command("serverStatus")
 if serverStatusResult:
-    print('Connected to MongoDB database at {0}'.format(MONGO_ADDR))
+    print('Connected to MongoDB database at ' + Fore.YELLOW + '{0}'.format(MONGO_ADDR) + Style.RESET_ALL)
 
 class MyBot(discord.Client):
     def __init__(self, *args, **kwargs):
@@ -39,7 +40,7 @@ class MyBot(discord.Client):
         super().__init__(*args, **kwargs)
 
     async def on_ready(self): # Event called when bot is ready
-        print('{0.user} is now ready.'.format(bot_client))
+        print(Fore.YELLOW + '{0.user} is now ready.'.format(bot_client) + Style.RESET_ALL)
 
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
         # Update favorites
