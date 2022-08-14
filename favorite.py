@@ -52,10 +52,10 @@ async def update_favorite(self, payload, db):
 
     # Check type of event
     if event_type == 'REACTION_ADD' and message:
-        print("User '{0}' [id={1}] starred message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
+        print("User '{0}' [id={1}] starred message.".format(member, user_id))
     elif event_type == 'REACTION_REMOVE' and message:
-        print("User '{0}' [id={1}] unstarred message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
-    elif not message:
+        print("User [id={0}] unstarred message.".format(user_id)) # member not available on remove
+    else:
         mdb.printlog("Error occured when user '{0}' [id={1}] updated star reaction.".format(member, user_id))
 
 async def add_hall_entry(self, msg, db):
