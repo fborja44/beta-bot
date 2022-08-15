@@ -27,9 +27,9 @@ async def update_favorite(self, payload, db):
     # Check if user is interacting with own message
     if user_id == message.author.id:
         if event_type == 'REACTION_ADD':
-            printlog("User '{0}' [id={1}] self-starred message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
+            printlog(f"User '{message.author.name}' [id={message.author.id}] self-starred message [id={payload.message_id}].")
         elif event_type == 'REACTION_REMOVE':
-            printlog("User '{0}' [id={1}] removed self-star on message [id={2}].".format(message.author.name, message.author.id, payload.message_id))
+            printlog(f"User '{message.author.name}' [id={message.author.id}] removed self-star on message [id={payload.message_id}].")
         return
 
     msg = {"message_id": message.id,
@@ -53,11 +53,11 @@ async def update_favorite(self, payload, db):
 
     # Check type of event
     if event_type == 'REACTION_ADD' and message:
-        print("User '{0}' [id={1}] starred message.".format(member, user_id))
+        print(f"User '{member}' [id={user_id}] starred message.")
     elif event_type == 'REACTION_REMOVE' and message:
-        print("User [id={0}] unstarred message.".format(user_id)) # member not available on remove
+        print(f"User [id={user_id}] unstarred message.") # member not available on remove
     else:
-        printlog("Error occured when user '{0}' [id={1}] updated star reaction.".format(member, user_id))
+        printlog(f"Error occured when user '{member}' [id={user_id}] updated star reaction.")
 
 async def add_hall_entry(self, msg, db):
     message_id = msg['message_id']
@@ -75,7 +75,7 @@ async def update_hall_entry(self, msg, db):
     try:
         entry = db['hall-of-fame'].find_one({"message_id": message_id})
     except:
-        print("Failed to get message with id '{0}' from favorites.".format(str(message_id)))
+        print(f"Failed to get message with id '{str(message_id)}' from favorites.")
         return
     if not entry:
         # Add to hall

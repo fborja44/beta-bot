@@ -17,9 +17,9 @@ async def get_cmd(self, message, db, cmd_name):
     try:
         cmd = await mdb.find_document(db, {"name": cmd_name}, COMMANDS)
     except:
-        printlog("DB_ERROR: Failed to find command '{0}'.".format(cmd_name))
+        printlog(f"DB_ERROR: Failed to find command '{cmd_name}'.")
     if not cmd:
-        await message.channel.send("Command '{0}' not found.".format(cmd_name))
+        await message.channel.send(f"Command '{cmd_name}' not found.")
     return cmd
 
 async def register_cmd(self, message, db, argv, argc):
@@ -32,13 +32,13 @@ async def register_cmd(self, message, db, argv, argc):
     # Check if command already exists or in PRESET_CMD
     cmd = await mdb.find_document(db, {"name": cmd_name}, COMMANDS)
     if cmd or cmd_name in PRESET_CMD:
-        return await message.channel.send("Command with name '{0}' already exists.".format(cmd_name))
+        return await message.channel.send(f"Command with name '{cmd_name}' already exists.")
 
     # Check if command name contains only alphanumeric characters
     # First character may be $
     valid = re.match('(^\$[\w-]+$)|(^[\w-]+$)', cmd_name) is not None
     if not valid:
-        return await message.channel.send("Command with name '{0}' is invalid. Only alphanumeric characters and prefix '$' are allowed.".format(cmd_name))
+        return await message.channel.send(f"Command with name '{cmd_name}' is invalid. Only alphanumeric characters and prefix '$' are allowed.")
 
     # Build command and add to collection   
     cmd_content = ' '.join(argv[2:]) # get cmd message
@@ -69,17 +69,17 @@ async def register_cmd(self, message, db, argv, argc):
             msg = "Failed to create new command. Invalid argument syntax. Missing number(s): "
             for i in range(len(missing)):
                 if i != len(missing)-1:
-                    msg += "'{0}', ".format(missing[i])
+                    msg += f"'{missing[i]}', "
                 else:
-                    msg += "'{0}'.".format(missing[i])
+                    msg += f"'{missing[i]}'."
             return await message.channel.send(msg)
         # Successfully parsed special arguments
         cmd["argc"] = specArgc
 
     cmd_id = await mdb.add_document(db, cmd, COMMANDS)
     if cmd_id:
-        msg = "Created new command '{0}'.".format(cmd_name)
-        print("User '{0}' [id={1}] created new command '{2}'.".format(message.author.name, message.author.id, cmd_name))
+        msg = f"Created new command '{cmd_name}'."
+        print(f"User '{message.author.name}' [id={message.author.id}] created new command '{cmd_name}'.")
     else:
         msg = "Failed to create new command."
     await message.channel.send(msg)
@@ -96,22 +96,25 @@ async def call_cmd(self, message, db, argv, argc):
     if cmd:
         # Check argument count
         # Extra arguments don't matter / won't be printed
+        diff = abs(argc-cmd["argc"])
         if argc < cmd["argc"]:
-            return await message.channel.send("Missing {0} argument(s).".format(abs(argc-cmd["argc"])))
+            return await message.channel.send(f"Missing {diff} argument(s).")
 
+        # TODO: Test
         # Print with arguments inserted
         # Replace each instance of ${n} one by one
         for i in range(argc-1):
-            cmd["content"] = cmd["content"].replace("${{{0}}}".format(str(i)), argv[i])
+            cmd["content"] = cmd["content"].replace(f"${{{i}}}", argv[i])
 
         # Print with counter
         if 'count' in cmd.keys():
             result = mdb.update_single_field(db, {'name': cmd_name}, {'$inc': {'count': 1}}, COMMANDS)
             if result:
-                print("Incremented count for command '{0}'.".format(cmd_name))
-                await message.channel.send(cmd["content"].replace('${count}', str(cmd['count']+1)))
+                print(f"Incremented count for command '{cmd_name}'.")
+                new_count = str(cmd['count']+1)
+                await message.channel.send(cmd["content"].replace(f'${new_count}', ))
             else: # Still print message on failure with non-updated count
-                print("Failed to increment count for command '{0}'.".format(cmd_name))
+                print(f"Failed to increment count for command '{cmd_name}'.")
                 await message.channel.send(cmd["content"].replace('${count}', str(cmd['count'])))
         else: # Print normally
             await message.channel.send(cmd["content"])
@@ -125,14 +128,14 @@ async def delete_cmd(self, message, db, argv, argc):
     elif argc > 3:
         return await message.channel.send("Too many arguments.\n" + usage)
 
-    cmd_name = argv[1]
+    cmd_name = argv[2]
     # Get command from database and delete
     result = await mdb.delete_document(db, {"name": cmd_name}, COMMANDS)
     # Command does not exist
     if result:
-        await message.channel.send("Successfully deleted command '{0}'.".format(cmd_name))
+        await message.channel.send(f"Successfully deleted command '{cmd_name}'.")
     else:
-        await message.channel.send("Failed to delete command '{0}'; Command does not exist.".format(cmd_name))
+        await message.channel.send(f"Failed to delete command '{cmd_name}'; Command does not exist.")
 
 async def edit_cmd(self, message, db, argv, argc):
     usage = 'Usage: `$cmd edit <name> <text>`'
@@ -147,7 +150,7 @@ async def edit_cmd(self, message, db, argv, argc):
     cmd = await mdb.update_single_field(db, {"name": cmd_name}, {'$set': {'content': cmd_content}}, COMMANDS)
     # Command does not exist
     if cmd:
-        msg = "Successfully edited command '{0}'.".format(cmd_name)
+        msg = f"Successfully edited command '{cmd_name}'."
         await message.channel.send(msg)
     else:
-        await message.channel.send("Failed to edit command '{0}'; Command does not exist.".format(cmd_name))
+        await message.channel.send(f"Failed to edit command '{cmd_name}'; Command does not exist.")

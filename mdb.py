@@ -18,7 +18,7 @@ async def find_document(db, target, collection, message=None, send_text=None):
     try:
         document = db[collection].find_one(target)
     except:
-        printlog("DB_ERROR: Failed to find document in [{0}]:\ntarget=[{1}]".format(collection, target))
+        printlog(f"DB_ERROR: Failed to find document in [{collection}]:\ntarget=[{target}]")
         return
     if message and send_text:
         message.channel.send(send_text)
@@ -28,41 +28,41 @@ async def add_document(db, document, collection, message=None, send_text=None):
     try:
         inserted_id = db[collection].insert_one(document).inserted_id
     except:
-        printlog("DB_ERROR: Failed to add document to [{0}]:\n{1}".format(collection, document))
+        printlog(f"DB_ERROR: Failed to add document to [{collection}]:\n{document}")
         return
     if inserted_id:
-        printlog("Successfully added document to [{0}]:\n{1}".format(collection, document))
+        printlog(f"Successfully added document to [{collection}]:\n{document}")
         if message and send_text:
             message.channel.send(send_text)
         return inserted_id
     else:
-        printlog("Could not add document to [{0}]:\n{1}".format(collection, document))
+        printlog(f"Could not add document to [{collection}]:\n{document}")
 
 async def delete_document(db, target, collection, message=None, send_text=None):
     try:
         result = db[collection].delete_one(target)
     except:
-        printlog("DB_ERROR: Failed to remove document from [{0}]:\ntarget=[{1}]".format(collection, target))
+        printlog(f"DB_ERROR: Failed to remove document from [{collection}]:\ntarget=[{target}]")
         return
     if result.deleted_count > 0:
-        printlog("Successfully removed document from [{0}]:\ntarget=[{1}]".format(collection, target))
+        printlog(f"Successfully removed document from [{collection}]:\ntarget=[{target}]")
         if message and send_text:
             message.channel.send(send_text)
         return result
     else:
-        printlog("Could not find/delete document in [{0}]:\ntarget=[{1}]".format(collection, target))
+        printlog(f"Could not find/delete document in [{collection}]:\ntarget=[{target}]")
 
 async def update_single_field(db, target, update_obj, collection, message=None, send_text=None):
     try:
         document = db[collection].find_one_and_update(target, update_obj, return_document=ReturnDocument.AFTER)
     except:
-        printlog("DB_ERROR: Failed to find/update document in [{0}]:\ntarget=[{1}]".format(collection, target))
+        printlog(f"DB_ERROR: Failed to find/update document in [{collection}]:\ntarget=[{target}]")
         return
     if document:
-        printlog("Successfully updated document in [{0}]:\n{1}".format(collection, document))
+        printlog(f"Successfully updated document in [{collection}]:\n{document}")
         if message and send_text:
             message.channel.send(send_text)
         return document
     else:
-        printlog("Could not find/update document in [{0}]:\ntarget=[{1}]".format(collection, target))
+        printlog(f"Could not find/update document in [{collection}]:\ntarget=[{target}]")
 

@@ -34,7 +34,7 @@ db = db_client['beta-bot']
 # Debugging: serverStatus
 serverStatusResult = db.command("serverStatus")
 if serverStatusResult:
-    print('Connected to MongoDB database at ' + Fore.YELLOW + '{0}'.format(MONGO_ADDR) + Style.RESET_ALL)
+    print('Connected to MongoDB database at ' + Fore.YELLOW + f'{MONGO_ADDR}' + Style.RESET_ALL)
 
 class MyBot(discord.Client):
     def __init__(self, *args, **kwargs):
@@ -42,7 +42,7 @@ class MyBot(discord.Client):
         super().__init__(*args, **kwargs)
 
     async def on_ready(self): # Event called when bot is ready
-        print(Fore.YELLOW + '{0.user} is now ready.'.format(bot_client) + Style.RESET_ALL)
+        print(Fore.YELLOW + f'{bot_client.user} is now ready.' + Style.RESET_ALL)
 
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
         # Check if reacting to self 

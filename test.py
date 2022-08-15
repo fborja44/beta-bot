@@ -31,4 +31,4 @@ argv = test[:match[0]].split()
 # print(argv)
 
 BASE_URL = 'https://api.challonge.com/v2'
-response = requests
+response = requests.get()

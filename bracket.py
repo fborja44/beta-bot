@@ -18,7 +18,7 @@ time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9] ([AaPp][Mm])$') # e
 time_re_short = re.compile(r'([1-9]|0[1-9]|1[0-2]) ([AaPp][Mm])$')           # ex. 10 PM
 
 def create_bracket_embed(name, author, time, entrants=[]):
-    embed = Embed(title='🥊  {0}'.format(name), description="Created by {0}".format(author), color=0x6A0DAD)
+    embed = Embed(title=f'🥊  {name}', description=f"Created by {author}", color=0x6A0DAD)
     time_str = time.strftime("%A, %B %d, %Y %I:%M %p") # time w/o ms
     embed.add_field(name='Starting At', value=time_str, inline=False)
     if len(entrants) > 0:
@@ -26,10 +26,10 @@ def create_bracket_embed(name, author, time, entrants=[]):
         for entrant_id in entrants:
             # To mention a user:
             # <@{user_id}>
-            entrants_content += "> <@{0}>\n".format(entrant_id)
+            entrants_content += f"> <@{entrant_id}>\n"
     else:
         entrants_content = '> *None*'
-    embed.add_field(name='Entrants ({0})'.format(len(entrants)), value=entrants_content, inline=False)
+    embed.add_field(name=f'Entrants ({len(entrants)})', value=entrants_content, inline=False)
     embed.set_footer(text='React with ✅ to enter!')
     return embed
 
@@ -51,10 +51,10 @@ async def add_bracket(self, message, db, argv, argc):
         current_time = datetime.now()
         if match1:
             match = match1.span()
-            time = datetime.strptime('{0} {1}'.format(date.today(), match1.group()), '%Y-%m-%d %I:%M %p')
+            time = datetime.strptime(f'{date.today()} {match1.group()}', '%Y-%m-%d %I:%M %p')
         elif match2:
             match = match2.span()
-            time = datetime.strptime('{0} {1}'.format(date.today(), match2.group()), '%Y-%m-%d %I %p')
+            time = datetime.strptime(f'{date.today()} {match2.group()}', '%Y-%m-%d %I %p')
         # Check if current time is before time on current date; If so, go to next day
         if current_time > time:
             time += timedelta(days=1)
@@ -66,7 +66,7 @@ async def add_bracket(self, message, db, argv, argc):
     # Check if bracket already exists
     bracket = await get_bracket(self, db, bracket_name)
     if bracket:
-        return await message.channel.send("Bracket with name '{0}' already exists.".format(bracket_name))
+        return await message.channel.send(f"Bracket with name '{bracket_name}' already exists.")
 
     # Send embed message
     embed = create_bracket_embed(bracket_name, message.author.name, time)
@@ -79,7 +79,7 @@ async def add_bracket(self, message, db, argv, argc):
                'entrants': [], 'starttime': time, 'endtime': None, 
                'open': True}
     if await mdb.add_document(db, bracket, BRACKETS):
-        print("User '{0}' [id={1}] created new bracket '{2}'.".format(message.author.name, message.author.id, bracket_name))
+        print(f"User '{message.author.name}' [id={message.author.id}] created new bracket '{bracket_name}'.")
 
 async def delete_bracket(self, message, db, argv, argc):
     usage = 'Usage: `$bracket delete <name>`'
@@ -90,18 +90,18 @@ async def delete_bracket(self, message, db, argv, argc):
     # Check if bracket already exists
     bracket = await get_bracket(self, db, bracket_name)
     if not bracket:
-        return await message.channel.send("Bracket with name '{0}' does not exist.".format(bracket_name))
+        return await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
     result = await mdb.delete_document(db, {'name': bracket_name}, BRACKETS)
     try:
         bracket_message = await message.channel.fetch_message(bracket['bracket_id'])
         await bracket_message.delete()
     except:
-        print("Failed to delete message for bracket '{0}' [id='{1}']".format(bracket_name, bracket['bracket_id']))
+        print(f"Failed to delete message for bracket '{bracket_name}' [id='{bracket['bracket_id']}']")
     if result:
-        print("User '{0}' [id={1}] created new bracket '{2}'.".format(message.author.name, message.author.id, bracket_name))
-        await message.channel.send("Successfully deleted bracket '{0}'.".format(bracket_name))
+        print(f"User '{message.author.name}' [id={message.author.id}] created new bracket '{bracket_name}'.")
+        await message.channel.send(f"Successfully deleted bracket '{bracket_name}'.")
     else:
-        await message.channel.send("Failed to delete bracket '{0}'; Bracket does not exist.".format(bracket_name))
+        await message.channel.send(f"Failed to delete bracket '{bracket_name}'; Bracket does not exist.")
 
 async def update_bracket(self, message, db, argv, argc):
     usage = 'Usage: `$bracket update <name>`'
@@ -123,21 +123,21 @@ async def add_entrant(self, db, message_id, member_id, channel_id):
     # Add user to entrants list
     bracket = await mdb.update_single_field(db, {'bracket_id': message_id}, {'$push': {'entrants': member_id}}, BRACKETS)
     if bracket:
-        print("Added entrant [id='{0}'] to bracket [id='{1}'].".format(member_id, message_id))
+        print(f"Added entrant [id='{member_id}'] to bracket [id='{message_id}'].")
         # Update message
         await edit_bracket_message(self, bracket, message_id, channel_id)
     else:
-        print("Failed to add entrant [id='{0}'] to bracket [id='{1}'].".format(member_id, message_id))
+        print(f"Failed to add entrant [id='{member_id}'] to bracket [id='{message_id}'].")
 
 async def remove_entrant(self, db, message_id, member_id, channel_id):
     # Remove user from entrants list
     bracket = await mdb.update_single_field(db, {'bracket_id': message_id}, {'$pull': {'entrants': member_id}}, BRACKETS)
     if bracket:
-        print("Removed entrant [id='{0}'] from bracket [id='{1}'].".format(member_id, message_id))
+        print(f"Removed entrant [id='{member_id}'] from bracket [id='{message_id}'].")
         # Update message
         await edit_bracket_message(self, bracket, message_id, channel_id)
     else:
-        print("Failed to remove entrant [id='{0}'] from bracket [id='{1}'].".format(member_id, message_id))
+        print(f"Failed to remove entrant [id='{member_id}'] from bracket [id='{message_id}'].")
 
 async def edit_bracket_message(self, bracket, message_id, channel_id):
     channel = self.get_channel(channel_id)
