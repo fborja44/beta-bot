@@ -1,5 +1,7 @@
+from pydoc import describe
 import discord
 import logging
+import bracket
 import command
 import favorite
 import os
@@ -43,13 +45,20 @@ class MyBot(discord.Client):
         print(Fore.YELLOW + '{0.user} is now ready.'.format(bot_client) + Style.RESET_ALL)
 
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
-        # Update favorites
+        # Check if reacting to self 
+        if payload.user_id == self.user.id:
+            return
+
         if payload.emoji.name == '⭐':
+            # Update favorites
             await favorite.update_favorite(self, payload, db)
+        elif payload.emoji.name =='✅':
+            # Update bracket entrants
+            await bracket.update_bracket_entrants(self, payload, db)
     
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
-        # Update favorites
         if payload.emoji.name == '⭐':
+            # Update favorites
             await favorite.update_favorite(self, payload, db)
 
     async def on_message(self, message): # Event went the bot receives a message
@@ -61,21 +70,52 @@ class MyBot(discord.Client):
             # TODO
             return
 
-        # Register new command
+        # Brackets
+        elif message.content.startswith('$bracket'):
+            usage = 'Usage: `$bracket <option>`'
+            # Parse args
+            argv = message.content.split()
+            argc = len(argv)
+            if argc == 1:
+                return await message.channel.send(usage)
+            # Get option
+            match argv[1]:
+                case "create":
+                    await bracket.add_bracket(self, message, db, argv, argc)
+                case "edit":
+                    await bracket.update_bracket(self, message, db, argv, argc)
+                case "delete":
+                    await bracket.delete_bracket(self, message, db, argv, argc)
+                case _:
+                    # TODO: List options
+                    pass
+
+        # Commands
         elif message.content.startswith('$cmd'): 
-            await command.register_cmd(self, message, db)
-            message.reactions 
-        # Delete registered command
-        elif message.content.startswith('$delcmd'):
-            await command.delete_cmd(self, message, db)
-
-        # Edit registered command
-        elif message.content.startswith('$editcmd'):
-            await command.edit_cmd(self, message, db)
-
-        # Custom command call
+            usage = 'Usage: `$cmd <option>`'
+            # Parse args
+            argv = message.content.split()
+            argc = len(argv)
+            if argc == 1:
+                return await message.channel.send(usage)
+            # Get option
+            match argv[1]:
+                case "delete":
+                    # Delete existing command
+                    await command.delete_cmd(self, message, db, argv, argc)
+                case "edit":
+                    # Edit existing
+                    await command.edit_cmd(self, message, db, argv, argc)
+                case _:
+                    # Create new command
+                    await command.register_cmd(self, message, db, argv, argc)
+        
         else:
-            await command.call_cmd(self, message, db)
+            # Parse args
+            argv = message.content.split()
+            argc = len(argv)
+
+            await command.call_cmd(self, message, db, argv, argc)
 
 bot_client = MyBot()
 bot_client.run(TOKEN)

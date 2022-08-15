@@ -1,5 +1,3 @@
-import discord
-import pymongo
 import mdb
 from pprint import pprint
 from logger import printlog

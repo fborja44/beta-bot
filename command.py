@@ -1,14 +1,13 @@
-import discord
-import pymongo
 import re
 import mdb
 from pprint import pprint
+from logger import printlog
 
 # command.py
 # $cmd custom commands
 
 COMMANDS = 'commands'
-PRESET_CMD = ['$cmd', '$delcmd', '$editcmd', '$info']
+PRESET_CMD = ['$cmd', '$info']
 
 # Regex
 specArg = re.compile(r'\$\{(\d?)\}') # ${[0, N)} 
@@ -18,37 +17,31 @@ async def get_cmd(self, message, db, cmd_name):
     try:
         cmd = await mdb.find_document(db, {"name": cmd_name}, COMMANDS)
     except:
-        await message.channel.send("Failed to find command '{0}'.".format(cmd_name))
+        printlog("DB_ERROR: Failed to find command '{0}'.".format(cmd_name))
     if not cmd:
         await message.channel.send("Command '{0}' not found.".format(cmd_name))
     return cmd
 
-async def register_cmd(self, message, db):
+async def register_cmd(self, message, db, argv, argc):
     usage = 'Usage: `$cmd <name> <text>`'
-    cmd_arr = message.content.split()
-
     # Error checking
-    if len(cmd_arr) < 3:
-        await message.channel.send(usage)
-        return
+    if argc < 3:
+        return await message.channel.send(usage)
 
-    cmd_name = cmd_arr[1]
-
+    cmd_name = argv[1]
     # Check if command already exists or in PRESET_CMD
-    cmd = await mdb.find_document(db,"name", cmd_name, COMMANDS)
+    cmd = await mdb.find_document(db, {"name": cmd_name}, COMMANDS)
     if cmd or cmd_name in PRESET_CMD:
-        await message.channel.send("Command with name '{0}' already exists.".format(cmd_name))
-        return
+        return await message.channel.send("Command with name '{0}' already exists.".format(cmd_name))
 
     # Check if command name contains only alphanumeric characters
     # First character may be $
     valid = re.match('(^\$[\w-]+$)|(^[\w-]+$)', cmd_name) is not None
     if not valid:
-        await message.channel.send("Command with name '{0}' is invalid. Only alphanumeric characters and prefix '$' are allowed.".format(cmd_name))
-        return
+        return await message.channel.send("Command with name '{0}' is invalid. Only alphanumeric characters and prefix '$' are allowed.".format(cmd_name))
 
     # Build command and add to collection   
-    cmd_content = ' '.join(cmd_arr[2:]) # get cmd message
+    cmd_content = ' '.join(argv[2:]) # get cmd message
     cmd = {"name": cmd_name,
         "content": cmd_content,
         "author": { "username": message.author.name, "id": message.author.id },
@@ -79,40 +72,36 @@ async def register_cmd(self, message, db):
                     msg += "'{0}', ".format(missing[i])
                 else:
                     msg += "'{0}'.".format(missing[i])
-            await message.channel.send(msg)
-            return
+            return await message.channel.send(msg)
         # Successfully parsed special arguments
         cmd["argc"] = specArgc
 
     cmd_id = await mdb.add_document(db, cmd, COMMANDS)
     if cmd_id:
-        msg = "Created new command '{0}' with content '{1}'.".format(cmd_name, cmd_content)
+        msg = "Created new command '{0}'.".format(cmd_name)
         print("User '{0}' [id={1}] created new command '{2}'.".format(message.author.name, message.author.id, cmd_name))
     else:
         msg = "Failed to create new command."
     await message.channel.send(msg)
 
-async def call_cmd(self, message, db):
-    cmd_arr = message.content.split()
-    if message.author.bot or len(cmd_arr) == 0:
-        # print("Detected bot or system message.")
+async def call_cmd(self, message, db, argv, argc):
+    if message.author.bot or len(argv) == 0:
+        printlog("Detected bot or system message.")
         return
-    cmd_name = cmd_arr[0]
-    argc = len(cmd_arr) - 1
-    argv = cmd_arr[1:]
+    cmd_name = argv[0]
 
+    # TODO: Test
     # Get command from database
     cmd = await get_cmd(self, message, db, cmd_name)
     if cmd:
         # Check argument count
         # Extra arguments don't matter / won't be printed
         if argc < cmd["argc"]:
-            await message.channel.send("Missing {0} argument(s).".format(abs(argc-cmd["argc"])))
-            return
+            return await message.channel.send("Missing {0} argument(s).".format(abs(argc-cmd["argc"])))
 
         # Print with arguments inserted
         # Replace each instance of ${n} one by one
-        for i in range(argc):
+        for i in range(argc-1):
             cmd["content"] = cmd["content"].replace("${{{0}}}".format(str(i)), argv[i])
 
         # Print with counter
@@ -127,40 +116,33 @@ async def call_cmd(self, message, db):
         else: # Print normally
             await message.channel.send(cmd["content"])
 
-async def delete_cmd(self, message, db):
-    usage = 'Usage: `$delcmd <name>`'
-    cmd_arr = message.content.split()
-
+async def delete_cmd(self, message, db, argv, argc):
+    usage = 'Usage: `$cmd delete <name>`'
     # Check num args
-    argc = len(cmd_arr) - 1
-    if argc < 1:
+    if argc < 3:
         await message.channel.send(usage)
         return
-    elif argc > 1:
-        await message.channel.send("Too many arguments.\n" + usage)
-        return
+    elif argc > 3:
+        return await message.channel.send("Too many arguments.\n" + usage)
 
-    cmd_name = cmd_arr[1]
+    cmd_name = argv[1]
     # Get command from database and delete
     result = await mdb.delete_document(db, {"name": cmd_name}, COMMANDS)
     # Command does not exist
     if result:
-        await message.channel.send(msg = "Successfully deleted command '{0}'.".format(cmd_name))
+        await message.channel.send("Successfully deleted command '{0}'.".format(cmd_name))
     else:
         await message.channel.send("Failed to delete command '{0}'; Command does not exist.".format(cmd_name))
 
-async def edit_cmd(self, message, db):
-    usage = 'Usage: `$editcmd <name> <text>`'
-    cmd_arr = message.content.split()
-    cmd_content = ' '.join(cmd_arr[2:]) # get cmd message
+async def edit_cmd(self, message, db, argv, argc):
+    usage = 'Usage: `$cmd edit <name> <text>`'
+    cmd_content = ' '.join(argv[2:]) # get cmd message
 
     # Check num args
-    argc = len(cmd_arr) - 1
-    if argc < 2:
-        await message.channel.send(usage)
-        return
+    if argc < 4:
+        return await message.channel.send(usage)
 
-    cmd_name = cmd_arr[1]
+    cmd_name = argv[1]
     # Get command from database and update
     cmd = await mdb.update_single_field(db, {"name": cmd_name}, {'$set': {'content': cmd_content}}, COMMANDS)
     # Command does not exist
