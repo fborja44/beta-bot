@@ -11,6 +11,22 @@ from datetime import datetime
 
 BRACKETS = 'brackets'
 
+def create_bracket_embed(name, author, entrants=[]):
+    embed = Embed(title='🥊  {0}'.format(name), description="Created by {0}".format(author), color=0x6A0DAD)
+    time = datetime.now().strftime("%A, %B %d, %Y %I:%M %p") # time w/o ms
+    embed.add_field(name='Starting At', value=time, inline=False)
+    if len(entrants) > 0:
+        entrants_content = ""
+        for entrant_id in entrants:
+            # To mention a user:
+            # <@{user_id}>
+            entrants_content += "> <@{0}>\n".format(entrant_id)
+    else:
+        entrants_content = '> *None*'
+    embed.add_field(name='Entrants ({0})'.format(len(entrants)), value=entrants_content, inline=False)
+    embed.set_footer(text='React with ✅ to enter!')
+    return embed
+
 async def get_bracket(self, db, bracket_name):
     return await mdb.find_document(db, {"name": bracket_name}, BRACKETS)
 
@@ -26,24 +42,17 @@ async def add_bracket(self, message, db, argv, argc):
         return await message.channel.send("Bracket with name '{0}' already exists.".format(bracket_name))
 
     # Send embed message
-    embed = Embed(title='🥊  {0}'.format(bracket_name), description="Created by {0}".format(message.author.name), color=0x6A0DAD)
-    embed.add_field(name='Starting At', value="Sunday, August 14, 2022 11:59 PM", inline=False)
-    embed.add_field(name='Entrants (0)', value="> *None*", inline=False)
-    embed.set_footer(text='React with ✅ to enter!')
-    message = await message.channel.send(embed=embed)
-    
-    # Add ✅ reaction to message
-    await message.add_reaction('✅')
-
+    embed = create_bracket_embed(bracket_name, message.author.name)
+    bracket_message = await message.channel.send(embed=embed)
     # Add bracket to DB
-    bracket = {'name': bracket_name, 'bracket_id': message.id, 
+    bracket = {'name': bracket_name, 'bracket_id': bracket_message.id, 
                'author': {'username': message.author.name, 'id': message.author.id},
                'entrants': [], 'starttime': datetime.utcnow(), 'endtime': None, 
                'open': True}
     await mdb.add_document(db, bracket, BRACKETS)
+    # Add ✅ reaction to message
+    await bracket_message.add_reaction('✅')
     print("User '{0}' [id={1}] created new bracket '{2}'.".format(message.author.name, message.author.id, bracket_name))
-
-    # Wait for reactions on bracket
 
 async def delete_bracket(self, message, db, argv, argc):
     usage = 'Usage: `$bracket delete <name>`'
@@ -88,22 +97,25 @@ async def add_entrant(self, db, message_id, member_id, channel_id):
     bracket = await mdb.update_single_field(db, {'bracket_id': message_id}, {'$push': {'entrants': member_id}}, BRACKETS)
     if bracket:
         print("Added entrant [id='{0}'] to bracket [id='{1}'].".format(member_id, message_id))
-        # Update Message
-        channel = self.get_channel(channel_id)
-        message = await channel.fetch_message(message_id)
-        entrants_content = ""
-        for entrant_id in bracket['entrants']:
-            # To mention a user:
-            # <@{user_id}>
-            entrants_content += "> <@{0}>\n".format(entrant_id)
-
-        embed = Embed(title='🥊  {0}'.format(bracket['name']), description="Created by {0}".format(message.author.name), color=0x6A0DAD)
-        embed.add_field(name='Starting At', value="Sunday, August 14, 2022 11:59 PM", inline=False)
-        embed.add_field(name='Entrants ({0})'.format(len(bracket['entrants'])), value=entrants_content, inline=False)
-        embed.set_footer(text='React with ✅ to enter!')
-        await message.edit(embed=embed)
+        # Update message
+        await edit_bracket_message(self, bracket, message_id, channel_id)
     else:
         print("Failed to add entrant [id='{0}'] to bracket [id='{1}'].".format(member_id, message_id))
 
-async def remove_entrant(self, db, message_id, member_id):
-    pass
+async def remove_entrant(self, db, message_id, member_id, channel_id):
+    # Remove user from entrants list
+    bracket = await mdb.update_single_field(db, {'bracket_id': message_id}, {'$pull': {'entrants': member_id}}, BRACKETS)
+    if bracket:
+        print("Removed entrant [id='{0}'] from bracket [id='{1}'].".format(member_id, message_id))
+        # Update message
+        await edit_bracket_message(self, bracket, message_id, channel_id)
+    else:
+        print("Failed to remove entrant [id='{0}'] from bracket [id='{1}'].".format(member_id, message_id))
+
+async def edit_bracket_message(self, bracket, message_id, channel_id):
+    channel = self.get_channel(channel_id)
+    message = await channel.fetch_message(message_id)
+    
+    embed = create_bracket_embed(bracket['name'], bracket['author']['username'], bracket['entrants'])
+    await message.edit(embed=embed)
+

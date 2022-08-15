@@ -48,7 +48,6 @@ class MyBot(discord.Client):
         # Check if reacting to self 
         if payload.user_id == self.user.id:
             return
-
         if payload.emoji.name == '⭐':
             # Update favorites
             await favorite.update_favorite(self, payload, db)
@@ -57,9 +56,15 @@ class MyBot(discord.Client):
             await bracket.update_bracket_entrants(self, payload, db)
     
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
+        # Check if reacting to self 
+        if payload.user_id == self.user.id:
+            return
         if payload.emoji.name == '⭐':
             # Update favorites
             await favorite.update_favorite(self, payload, db)
+        elif payload.emoji.name =='✅':
+            # Update bracket entrants
+            await bracket.update_bracket_entrants(self, payload, db)
 
     async def on_message(self, message): # Event went the bot receives a message
         if message.author == bot_client.user: # Checks if message is from self
