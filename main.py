@@ -1,14 +1,15 @@
-from pydoc import describe
-import discord
-import logging
 import bracket
 import command
+import challonge
+import discord
 import favorite
+import logging
 import os
 from colorama import Fore, Back, Style
-from pprint import pprint
-from pymongo import MongoClient
 from dotenv import load_dotenv
+from pprint import pprint
+from pydoc import describe
+from pymongo import MongoClient
 
 # main.py
 # beta-bot program
@@ -17,6 +18,10 @@ load_dotenv()
 
 TOKEN = os.getenv('TOKEN')
 MONGO_ADDR = os.getenv('MONGO')
+CHALLONGE_USER = os.getenv('CHALLONGE_USER')
+CHALLONGE_KEY = os.getenv('CHALLONGE_KEY')
+
+challonge.set_credentials(CHALLONGE_USER, CHALLONGE_KEY)
 
 print(Fore.CYAN + "Starting beta-bot..." + Style.RESET_ALL)
 print(Fore.MAGENTA + "============================================" + Style.RESET_ALL)

@@ -1,7 +1,7 @@
-import re
 import mdb
-from pprint import pprint
+import re
 from logger import printlog
+from pprint import pprint
 
 # command.py
 # $cmd custom commands

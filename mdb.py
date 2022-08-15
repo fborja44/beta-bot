@@ -1,8 +1,8 @@
 import os
-from pymongo import MongoClient, ReturnDocument
-from pprint import pprint
 from dotenv import load_dotenv
 from logger import printlog
+from pprint import pprint
+from pymongo import MongoClient, ReturnDocument
 
 # mdb.py
 # MongoDB function helpers

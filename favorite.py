@@ -1,6 +1,6 @@
 import mdb
-from pprint import pprint
 from logger import printlog
+from pprint import pprint
 
 # favorite.py
 # Hall of Fame messages
