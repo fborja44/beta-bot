@@ -43,7 +43,7 @@ if serverStatusResult:
 
 class MyBot(discord.Client):
     def __init__(self, *args, **kwargs):
-        self.cmd_prefix="$" # unsued
+        self.cmd_prefix="$" # unused
         super().__init__(*args, **kwargs)
 
     async def on_ready(self): # Event called when bot is ready

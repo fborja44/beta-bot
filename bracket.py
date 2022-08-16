@@ -211,7 +211,7 @@ async def finalize_bracket(self, message, db, argv, argc):
     if not bracket:
         return await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
     # Finalize bracket on challonge
-    response = challonge.tournaments.start(bracket['challonge']['challonge_id'], include_participants=True, include_matches=True)
+    response = challonge.tournaments.finalize(bracket['challonge']['challonge_id'], include_participants=True, include_matches=True)
      # Set bracket to completed in database
     updated_bracket = await mdb.update_single_field(db, {'bracket_id': bracket['bracket_id']}, {'$set': {'completed': True}}, BRACKETS)
     # Update embed message
