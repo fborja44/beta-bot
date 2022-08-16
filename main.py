@@ -96,6 +96,10 @@ class MyBot(discord.Client):
                     await bracket.update_bracket(self, message, db, argv, argc)
                 case "delete":
                     await bracket.delete_bracket(self, message, db, argv, argc)
+                case "start":
+                    await bracket.start_bracket(self, message, db, argv, argc)
+                case "finalize":
+                    await bracket.finalize_bracket(self, message, db, argv, argc)
                 case _:
                     # TODO: List options
                     pass
