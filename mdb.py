@@ -15,6 +15,9 @@ client = MongoClient(MONGO_ADDR)
 db = client['beta-bot']
 
 async def find_document(db, target, collection, message=None, send_text=None):
+    """
+    Finds a single document in the specifed collection.
+    """
     try:
         document = db[collection].find_one(target)
     except:
@@ -25,6 +28,9 @@ async def find_document(db, target, collection, message=None, send_text=None):
     return document
 
 async def add_document(db, document, collection, message=None, send_text=None):
+    """
+    Adds a single document to the specifed collection.
+    """
     try:
         inserted_id = db[collection].insert_one(document).inserted_id
     except:
@@ -39,6 +45,9 @@ async def add_document(db, document, collection, message=None, send_text=None):
         printlog(f"Could not add document to [{collection}]:\n{document}")
 
 async def delete_document(db, target, collection, message=None, send_text=None):
+    """
+    Deletes a single document from the specifed collection.
+    """
     try:
         result = db[collection].delete_one(target)
     except:
@@ -53,6 +62,9 @@ async def delete_document(db, target, collection, message=None, send_text=None):
         printlog(f"Could not find/delete document in [{collection}]:\ntarget=[{target}]")
 
 async def update_single_field(db, target, update_obj, collection, message=None, send_text=None):
+    """
+    Updates a single field in a document in the specifed collection.
+    """
     try:
         document = db[collection].find_one_and_update(target, update_obj, return_document=ReturnDocument.AFTER)
     except:

@@ -9,13 +9,22 @@ FAVORITES = 'favorites'
 HALL_OF_FAME = 'hall-of-fame'
 
 async def add_favorite(self, msg, db):
+    """
+    Adds a message to the favorites collection.
+    """
     return await mdb.add_document(db, msg, FAVORITES)
 
 async def delete_favorite(self, msg, db):
+    """
+    Deletes a message from the favorites collection.
+    """
     message_id = msg['message_id']
     return await mdb.delete_document(db, {'message_id': message_id}, FAVORITES)
 
 async def update_favorite(self, payload, db):
+    """
+    Updates a message in the favorites collection.
+    """
     channel = self.get_channel(payload.channel_id)
     member = payload.member
     user_id  = payload.user_id
@@ -32,10 +41,14 @@ async def update_favorite(self, payload, db):
             printlog(f"User '{message.author.name}' [id={message.author.id}] removed self-star on message [id={payload.message_id}].")
         return
 
-    msg = {"message_id": message.id,
-           "channel": { "id": message.channel.id, "name": message.channel.name, "nsfw": message.channel.nsfw, "category": message.channel.category_id },
-           "author": {"username": message.author.name, "id": message.author.id}}
-           
+    # New message document
+    msg = {
+        "message_id": message.id,
+        "channel": { "id": message.channel.id, "name": message.channel.name, 
+                    "nsfw": message.channel.nsfw, "category": message.channel.category_id },
+        "author": {"username": message.author.name, "id": message.author.id}
+    }
+    
     # Get star count
     reaction_list = list(filter(lambda reaction: (reaction.emoji == '⭐'), message.reactions))
     # Check reaction counts
@@ -60,16 +73,25 @@ async def update_favorite(self, payload, db):
         printlog(f"Error occured when user '{member}' [id={user_id}] updated star reaction.")
 
 async def add_hall_entry(self, msg, db):
+    """
+    Adds a message to the hall of fame collection.
+    """
     message_id = msg['message_id']
     # Add to hall
     entry = { "message_id": message_id, "star-count": msg['star_count'] }
     return await mdb.add_document(db, entry, HALL_OF_FAME)
 
 async def remove_hall_entry(self, msg, db):
+    """
+    Deletes a message from the hall of fame collection.
+    """
     message_id = msg['message_id']
     return await mdb.delete_document(db, {'message_id': message_id}, HALL_OF_FAME)
 
 async def update_hall_entry(self, msg, db):
+    """
+    Updates a message in the hall of fame collection.
+    """
     message_id = msg['message_id']
     # Check if in hall already
     try:

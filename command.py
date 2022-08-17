@@ -14,6 +14,9 @@ specArg = re.compile(r'\$\{(\d?)\}') # ${[0, N)}
 specVar = re.compile(r'\$\{(\w*?)\}') # ['count', 'user', 'randInt', 'jmook', 'emote']
 
 async def get_cmd(self, message, db, cmd_name):
+    """
+    Retrieves the specified command from the database.
+    """
     try:
         cmd = await mdb.find_document(db, {"name": cmd_name}, COMMANDS)
     except:
@@ -23,6 +26,9 @@ async def get_cmd(self, message, db, cmd_name):
     return cmd
 
 async def register_cmd(self, message, db, argv, argc):
+    """
+    Registers a new command to the database. Can have special arguments specified.
+    """
     usage = 'Usage: `$cmd <name> <text>`'
     # Error checking
     if argc < 3:
@@ -42,10 +48,12 @@ async def register_cmd(self, message, db, argv, argc):
 
     # Build command and add to collection   
     cmd_content = ' '.join(argv[2:]) # get cmd message
-    cmd = {"name": cmd_name,
+    cmd = {
+        "name": cmd_name,
         "content": cmd_content,
         "author": { "username": message.author.name, "id": message.author.id },
-        "argc": 0}
+        "argc": 0
+    }
 
     # Check for ${} special variables
     cmd_specVar = specVar.search(cmd['content'])
@@ -85,7 +93,10 @@ async def register_cmd(self, message, db, argv, argc):
     await message.channel.send(msg)
 
 async def call_cmd(self, message, db, argv, argc):
-    if message.author.bot or len(argv) == 0:
+    """
+    Checks if the message is a valid command in the database and sends a message with the command's content.
+    """
+    if message.author.bot or message.is_system() or len(argv) == 0:
         printlog("Detected bot or system message.")
         return
     cmd_name = argv[0]
@@ -120,6 +131,9 @@ async def call_cmd(self, message, db, argv, argc):
             await message.channel.send(cmd["content"])
 
 async def delete_cmd(self, message, db, argv, argc):
+    """
+    Deletes the specified command from the database.
+    """
     usage = 'Usage: `$cmd delete <name>`'
     # Check num args
     if argc < 3:
@@ -138,6 +152,9 @@ async def delete_cmd(self, message, db, argv, argc):
         await message.channel.send(f"Failed to delete command '{cmd_name}'; Command does not exist.")
 
 async def edit_cmd(self, message, db, argv, argc):
+    """
+    Edits the content of the specified command.
+    """
     usage = 'Usage: `$cmd edit <name> <text>`'
     cmd_content = ' '.join(argv[2:]) # get cmd message
 

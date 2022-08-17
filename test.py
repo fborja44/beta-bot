@@ -4,6 +4,7 @@ import re
 import requests
 from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
+from pprint import pprint
 
 load_dotenv()
 
@@ -35,15 +36,24 @@ load_dotenv()
 # argv = test[:match[0]].split()
 # print(argv)
 
-CHALLONGE_USER = os.getenv('CHALLONGE_USER')
-CHALLONGE_KEY = os.getenv('CHALLONGE_KEY')
+# CHALLONGE_USER = os.getenv('CHALLONGE_USER')
+# CHALLONGE_KEY = os.getenv('CHALLONGE_KEY')
 
-challonge.set_credentials(CHALLONGE_USER, CHALLONGE_KEY)
+# challonge.set_credentials(CHALLONGE_USER, CHALLONGE_KEY)
 
-tournament = challonge.tournaments.create(name="Test", url=None, tournament_type='double elimination', start_at=datetime.now(), show_rounds=True, private=True)
-print(tournament)
+# tournament = challonge.tournaments.create(name="Test", url=None, tournament_type='double elimination', start_at=datetime.now(), show_rounds=True, private=True)
+# print(tournament)
 
-challonge.participants.create(tournament['id'], "Billy Bob")
+# challonge.participants.create(tournament['id'], "Player 1")
+# challonge.participants.create(tournament['id'], "Player 2")
+# challonge.participants.create(tournament['id'], "Player 3")
+# challonge.participants.create(tournament['id'], "Player 4")
+
+# matches = challonge.matches.index(11612007)
+# pprint(matches)
 
 # response = challonge.tournaments.destroy(tournament['id'])
 # print(response)
+
+message_arr = re.split(" +| *- *", "Mang0 3 - 2 Zain")
+print(message_arr)
