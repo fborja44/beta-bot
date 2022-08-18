@@ -21,6 +21,28 @@ BASE_URL = 'https://api.challonge.com/v2'
 time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9] ([AaPp][Mm])$') # ex. 10:00 AM
 time_re_short = re.compile(r'([1-9]|0[1-9]|1[0-2]) ([AaPp][Mm])$')           # ex. 10 PM
 
+async def parse_args(self: Client, message: Message, db: Database, usage: str, argv: list, argc: int, f_argc: int = 2, send: bool = True):
+    """"
+    Parses arguments for bracket functions.
+    """
+    if argc < f_argc:
+        return await message.channel.send(usage)
+    # Get bracket from database
+    if argc >= f_argc + 1:
+        bracket_name = ' '.join(argv[2:]) # Get bracket name
+        # Check if bracket exists
+        bracket = await get_bracket(self, db, bracket_name)
+        if not bracket and send:
+            await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
+            return (None, None)
+    elif argc >= f_argc + 1:
+        # Get most recent bracket that has not yet been completed
+        bracket = await mdb.find_most_recent_document(db, {'completed', False}, BRACKETS)
+        if not bracket and send:
+            await message.channel.send(f"There are currently no open brackets.")
+            return (None, None)
+    return (bracket, bracket_name)
+
 def create_bracket_embed(name: str, author, time, url, entrants: list=[], status: str="Open for Registration  🚨"):
     """
     Creates embed object to include in bracket message.
@@ -112,23 +134,13 @@ async def add_bracket(self: Client, message: Message, db: Database, argv: list, 
     return (bracket, bracket_message, bracket_challonge)
     # TODO: Cleanup if anything fails (delete db entry, delete message, delete challonge bracket)
 
-async def delete_bracket(self: Client, message, db: Database, argv: list, argc: int):
+async def delete_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
     Deletes the specified bracket from the database (if it exists).
     """
-    usage = 'Usage: `$bracket delete <name>`'
-    if argc < 3:
-        return await message.channel.send(usage)
-
-    bracket_name = ' '.join(argv[2:]) # get bracket name
-    # Check if bracket already exists
-    try:
-        bracket = await get_bracket(self, db, bracket_name)
-        if not bracket:
-            return await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
-    except:
-        pass
-
+    usage = 'Usage: `$bracket delete [name]`'
+    bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc)
+    if not bracket: return
     # Only allow author to delete bracket
     if message.author.id != bracket['author']['id']:
         return await message.channel.send(f"Only the author can delete the bracket.")
@@ -152,15 +164,15 @@ async def delete_bracket(self: Client, message, db: Database, argv: list, argc: 
         await message.channel.send(f"Failed to delete bracket '{bracket_name}'.")
     
 
-async def update_bracket(self: Client, message, db: Database, argv: list, argc: int):
+async def update_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
     Updates the specified bracket in the database (if it exists).
 
     TODO
     """
-    usage = 'Usage: `$bracket update <name>`'
-    if argc < 3:
-        return await message.channel.send(usage)
+    usage = 'Usage: `$bracket update [name]`'
+    bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False)
+    if not bracket: return
 
 async def update_bracket_entrants(self: Client, payload: RawReactionActionEvent, db: Database):
     """
@@ -186,20 +198,13 @@ async def edit_bracket_message(self: Client, bracket, channel: TextChannel, stat
     embed = create_bracket_embed(bracket['name'], bracket['author']['username'], bracket['starttime'], bracket['challonge']['url'], bracket['entrants'], status)
     await message.edit(embed=embed)
 
-async def start_bracket(self: Client, message, db: Database, argv: list, argc: int):
+async def start_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
     Starts a bracket created by the user.
     """
-    usage = 'Usage: `$bracket start <name>`'
-    if argc < 3:
-        return await message.channel.send(usage)
-    
-    # Get bracket from database
-    bracket_name = ' '.join(argv[2:]) # get bracket name
-    # Check if bracket exists
-    bracket = await get_bracket(self, db, bracket_name)
-    if not bracket:
-        return await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
+    usage = 'Usage: `$bracket start [name]`'
+    bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc)
+    if not bracket: return
     # Make sure there are sufficient number of entrants
     if len(bracket['entrants']) < 2:
         return await message.channel.send(f"Bracket must have at least 2 entrants before starting.")
@@ -224,15 +229,9 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
     """
     Closes a bracket if completed.
     """
-    usage = 'Usage: `$bracket finalize <name>`'
-    if argc < 3:
-        return await message.channel.send(usage)
-    # Get bracket from database
-    bracket_name = ' '.join(argv[2:]) # get bracket name
-    # Check if bracket exists
-    bracket = await get_bracket(self, db, bracket_name)
-    if not bracket:
-        return await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
+    usage = 'Usage: `$bracket finalize [name]`'
+    bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False)
+    if not bracket: return
     # Finalize bracket on challonge
     response = challonge.tournaments.finalize(bracket['challonge']['id'], include_participants=True, include_matches=True)
      # Set bracket to completed in database
@@ -246,10 +245,13 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
     await message.channel.send(content=f"**{bracket_name}** has been finalized.", reference=message) # Reply to original bracket message
     print(response)
 
-async def reset_bracket(self: Client, message, db: Database, argv: list, argc: int):
+async def reset_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
     Resets a bracket if opened.
     """
+    usage = 'Usage: `$bracket reset [name]`'
+    bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False)
+    if not bracket: return
 
 async def create_test_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """

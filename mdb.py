@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from gridfs import Database
 from logger import printlog
 from pprint import pprint
-from pymongo import ReturnDocument
+from pymongo import ReturnDocument, DESCENDING
 import os
 
 # mdb.py
@@ -12,7 +12,7 @@ load_dotenv()
 
 MONGO_ADDR = os.getenv('MONGO')
 
-async def find_document(db: Database, target, collection, message=None, send_text=None):
+async def find_document(db: Database, target, collection: str, message=None, send_text=None):
     """
     Finds a single document in the specifed collection.
     """
@@ -20,6 +20,19 @@ async def find_document(db: Database, target, collection, message=None, send_tex
         document = db[collection].find_one(target)
     except:
         printlog(f"DB_ERROR: Failed to find document in [{collection}]:\ntarget=[{target}]")
+        return
+    if message and send_text:
+        message.channel.send(send_text)
+    return document
+
+async def find_most_recent_document(db: Database, target, collection: str, message=None, send_text=None):
+    """
+    Finds the most recently added document in the database.
+    """
+    try:
+        document = db[collection].find_one(target, sort=[{'_id': DESCENDING }])
+    except:
+        printlog(f"DB_ERROR: Failed to retrieve most recent document in [{collection}]:\n")
         return
     if message and send_text:
         message.channel.send(send_text)
@@ -42,7 +55,7 @@ async def add_document(db: Database, document, collection, message=None, send_te
     else:
         printlog(f"Could not add document to [{collection}]:\n{document}")
 
-async def delete_document(db: Database, target, collection, message=None, send_text=None):
+async def delete_document(db: Database, target, collection: str, message=None, send_text=None):
     """
     Deletes a single document from the specifed collection.
     """
@@ -59,7 +72,7 @@ async def delete_document(db: Database, target, collection, message=None, send_t
     else:
         printlog(f"Could not find/delete document in [{collection}]:\ntarget=[{target}]")
 
-async def update_single_field(db: Database, target, update_obj, collection, message=None, send_text=None):
+async def update_single_field(db: Database, target, update_obj, collection: str, message=None, send_text=None):
     """
     Updates a single field in a document in the specifed collection.
     """
@@ -75,4 +88,3 @@ async def update_single_field(db: Database, target, update_obj, collection, mess
         return document
     else:
         printlog(f"Could not find/update document in [{collection}]:\ntarget=[{target}]")
-
