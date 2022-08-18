@@ -1,5 +1,7 @@
 import mdb
 import re
+from discord import Client, Message
+from gridfs import Database
 from logger import printlog
 from pprint import pprint
 
@@ -13,7 +15,7 @@ PRESET_CMD = ['$cmd', '$info']
 specArg = re.compile(r'\$\{(\d?)\}') # ${[0, N)} 
 specVar = re.compile(r'\$\{(\w*?)\}') # ['count', 'user', 'randInt', 'jmook', 'emote']
 
-async def get_cmd(self, message, db, cmd_name):
+async def get_cmd(self, message: Message, db: Database, cmd_name: str):
     """
     Retrieves the specified command from the database.
     """
@@ -25,7 +27,7 @@ async def get_cmd(self, message, db, cmd_name):
         await message.channel.send(f"Command '{cmd_name}' not found.")
     return cmd
 
-async def register_cmd(self, message, db, argv, argc):
+async def register_cmd(self, message, db: Database, argv: list, argc: int):
     """
     Registers a new command to the database. Can have special arguments specified.
     """
@@ -92,7 +94,7 @@ async def register_cmd(self, message, db, argv, argc):
         msg = "Failed to create new command."
     await message.channel.send(msg)
 
-async def call_cmd(self, message, db, argv, argc):
+async def call_cmd(self, message, db: Database, argv: list, argc: int):
     """
     Checks if the message is a valid command in the database and sends a message with the command's content.
     """
@@ -130,7 +132,7 @@ async def call_cmd(self, message, db, argv, argc):
         else: # Print normally
             await message.channel.send(cmd["content"])
 
-async def delete_cmd(self, message, db, argv, argc):
+async def delete_cmd(self, message, db: Database, argv: list, argc: int):
     """
     Deletes the specified command from the database.
     """
@@ -151,7 +153,7 @@ async def delete_cmd(self, message, db, argv, argc):
     else:
         await message.channel.send(f"Failed to delete command '{cmd_name}'; Command does not exist.")
 
-async def edit_cmd(self, message, db, argv, argc):
+async def edit_cmd(self, message, db: Database, argv: list, argc: int):
     """
     Edits the content of the specified command.
     """

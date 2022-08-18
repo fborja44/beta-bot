@@ -1,6 +1,8 @@
-import mdb
+from discord import Client, Message, RawReactionActionEvent
+from gridfs import Database
 from logger import printlog
 from pprint import pprint
+import mdb
 
 # favorite.py
 # Hall of Fame messages
@@ -8,20 +10,20 @@ from pprint import pprint
 FAVORITES = 'favorites'
 HALL_OF_FAME = 'hall-of-fame'
 
-async def add_favorite(self, msg, db):
+async def add_favorite(self: Client, msg: Message, db: Database):
     """
     Adds a message to the favorites collection.
     """
     return await mdb.add_document(db, msg, FAVORITES)
 
-async def delete_favorite(self, msg, db):
+async def delete_favorite(self: Client, msg: Message, db: Database):
     """
     Deletes a message from the favorites collection.
     """
     message_id = msg['message_id']
     return await mdb.delete_document(db, {'message_id': message_id}, FAVORITES)
 
-async def update_favorite(self, payload, db):
+async def update_favorite(self: Client, payload: RawReactionActionEvent, db: Database):
     """
     Updates a message in the favorites collection.
     """
@@ -72,7 +74,7 @@ async def update_favorite(self, payload, db):
     else:
         printlog(f"Error occured when user '{member}' [id={user_id}] updated star reaction.")
 
-async def add_hall_entry(self, msg, db):
+async def add_hall_entry(self: Client, msg: Message, db: Database):
     """
     Adds a message to the hall of fame collection.
     """
@@ -81,14 +83,14 @@ async def add_hall_entry(self, msg, db):
     entry = { "message_id": message_id, "star-count": msg['star_count'] }
     return await mdb.add_document(db, entry, HALL_OF_FAME)
 
-async def remove_hall_entry(self, msg, db):
+async def remove_hall_entry(self: Client, msg: Message, db: Database):
     """
     Deletes a message from the hall of fame collection.
     """
     message_id = msg['message_id']
     return await mdb.delete_document(db, {'message_id': message_id}, HALL_OF_FAME)
 
-async def update_hall_entry(self, msg, db):
+async def update_hall_entry(self: Client, msg: Message, db: Database):
     """
     Updates a message in the hall of fame collection.
     """

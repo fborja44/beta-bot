@@ -1,3 +1,9 @@
+from discord import Message
+from colorama import Fore, Back, Style
+from dotenv import load_dotenv
+from pprint import pprint
+from pydoc import describe
+from pymongo import MongoClient
 import bracket
 import command
 import challonge
@@ -5,11 +11,6 @@ import discord
 import favorite
 import logging
 import os
-from colorama import Fore, Back, Style
-from dotenv import load_dotenv
-from pprint import pprint
-from pydoc import describe
-from pymongo import MongoClient
 
 # main.py
 # beta-bot program
@@ -71,7 +72,7 @@ class MyBot(discord.Client):
             # Update bracket entrants
             await bracket.update_bracket_entrants(self, payload, db)
 
-    async def on_message(self, message): # Event went the bot receives a message
+    async def on_message(self, message: Message): # Event went the bot receives a message
         if message.author == bot_client.user: # Checks if message is from self
             return
 
@@ -100,6 +101,8 @@ class MyBot(discord.Client):
                     await bracket.start_bracket(self, message, db, argv, argc)
                 case "finalize":
                     await bracket.finalize_bracket(self, message, db, argv, argc)
+                case "test":
+                    await bracket.create_test_bracket(self, message, db, argv, argc)
                 case _:
                     # TODO: List options
                     pass
@@ -131,5 +134,7 @@ class MyBot(discord.Client):
 
             await command.call_cmd(self, message, db, argv, argc)
 
-bot_client = MyBot()
+intents = discord.Intents.default()
+intents.members = True
+bot_client = MyBot(intents=intents)
 bot_client.run(TOKEN)

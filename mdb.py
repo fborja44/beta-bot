@@ -1,8 +1,9 @@
-import os
 from dotenv import load_dotenv
+from gridfs import Database
 from logger import printlog
 from pprint import pprint
-from pymongo import MongoClient, ReturnDocument
+from pymongo import ReturnDocument
+import os
 
 # mdb.py
 # MongoDB function helpers
@@ -11,10 +12,7 @@ load_dotenv()
 
 MONGO_ADDR = os.getenv('MONGO')
 
-client = MongoClient(MONGO_ADDR)
-db = client['beta-bot']
-
-async def find_document(db, target, collection, message=None, send_text=None):
+async def find_document(db: Database, target, collection, message=None, send_text=None):
     """
     Finds a single document in the specifed collection.
     """
@@ -27,7 +25,7 @@ async def find_document(db, target, collection, message=None, send_text=None):
         message.channel.send(send_text)
     return document
 
-async def add_document(db, document, collection, message=None, send_text=None):
+async def add_document(db: Database, document, collection, message=None, send_text=None):
     """
     Adds a single document to the specifed collection.
     """
@@ -44,7 +42,7 @@ async def add_document(db, document, collection, message=None, send_text=None):
     else:
         printlog(f"Could not add document to [{collection}]:\n{document}")
 
-async def delete_document(db, target, collection, message=None, send_text=None):
+async def delete_document(db: Database, target, collection, message=None, send_text=None):
     """
     Deletes a single document from the specifed collection.
     """
@@ -61,7 +59,7 @@ async def delete_document(db, target, collection, message=None, send_text=None):
     else:
         printlog(f"Could not find/delete document in [{collection}]:\ntarget=[{target}]")
 
-async def update_single_field(db, target, update_obj, collection, message=None, send_text=None):
+async def update_single_field(db: Database, target, update_obj, collection, message=None, send_text=None):
     """
     Updates a single field in a document in the specifed collection.
     """
