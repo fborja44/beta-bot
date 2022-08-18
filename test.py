@@ -1,10 +1,10 @@
+from datetime import datetime, date, timedelta
+from dotenv import load_dotenv
+from pprint import pprint
 import challonge
 import os
 import re
 import requests
-from datetime import datetime, date, timedelta
-from dotenv import load_dotenv
-from pprint import pprint
 
 load_dotenv()
 

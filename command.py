@@ -1,9 +1,9 @@
-import mdb
-import re
 from discord import Client, Message
 from gridfs import Database
 from logger import printlog
 from pprint import pprint
+import mdb
+import re
 
 # command.py
 # $cmd custom commands
@@ -23,8 +23,8 @@ async def get_cmd(self, message: Message, db: Database, cmd_name: str):
         cmd = await mdb.find_document(db, {"name": cmd_name}, COMMANDS)
     except:
         printlog(f"DB_ERROR: Failed to find command '{cmd_name}'.")
-    if not cmd:
-        await message.channel.send(f"Command '{cmd_name}' not found.")
+    # if not cmd:
+    #     await message.channel.send(f"Command '{cmd_name}' not found.")
     return cmd
 
 async def register_cmd(self, message, db: Database, argv: list, argc: int):
@@ -84,7 +84,7 @@ async def register_cmd(self, message, db: Database, argv: list, argc: int):
                     msg += f"'{missing[i]}'."
             return await message.channel.send(msg)
         # Successfully parsed special arguments
-        cmd["argc"] = specArgc
+        cmd["argc"] = specArgc + 1
 
     cmd_id = await mdb.add_document(db, cmd, COMMANDS)
     if cmd_id:
@@ -103,29 +103,27 @@ async def call_cmd(self, message, db: Database, argv: list, argc: int):
         return
     cmd_name = argv[0]
 
-    # TODO: Test
     # Get command from database
     cmd = await get_cmd(self, message, db, cmd_name)
     if cmd:
         # Check argument count
         # Extra arguments don't matter / won't be printed
-        diff = abs(argc-cmd["argc"])
+        diff = abs(argc-cmd["argc"]) + 1
         if argc < cmd["argc"]:
             return await message.channel.send(f"Missing {diff} argument(s).")
 
-        # TODO: Test
         # Print with arguments inserted
         # Replace each instance of ${n} one by one
         for i in range(argc-1):
-            cmd["content"] = cmd["content"].replace(f"${{{i}}}", argv[i])
+            cmd["content"] = cmd["content"].replace(f"${{{i}}}", argv[i+1])
 
         # Print with counter
         if 'count' in cmd.keys():
-            result = mdb.update_single_field(db, {'name': cmd_name}, {'$inc': {'count': 1}}, COMMANDS)
+            result = await mdb.update_single_field(db, {'name': cmd_name}, {'$inc': {'count': 1}}, COMMANDS)
             if result:
                 print(f"Incremented count for command '{cmd_name}'.")
                 new_count = str(cmd['count']+1)
-                await message.channel.send(cmd["content"].replace(f'${new_count}', ))
+                await message.channel.send(cmd["content"].replace(f'${{count}}', new_count))
             else: # Still print message on failure with non-updated count
                 print(f"Failed to increment count for command '{cmd_name}'.")
                 await message.channel.send(cmd["content"].replace('${count}', str(cmd['count'])))
