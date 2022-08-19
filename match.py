@@ -87,7 +87,10 @@ async def add_match(self: Client, message: Message, db: Database, bracket, match
         'completed': False,
         "winner": None
     }
-    await mdb.add_document(db, new_match, MATCHES)
+    try:
+        await mdb.add_document(db, new_match, MATCHES)
+    except:
+        return
     match_id = new_match['match_id']
 
     # Add match id and message id to bracket document
@@ -136,7 +139,7 @@ async def add_match(self: Client, message: Message, db: Database, bracket, match
     elif player1_vote == '2️⃣':
         winner = player2
     # Update score
-    await update_match_score(self, db, bracket['challonge']['id'], match_id, winner, embed)
+    await report_match(self, message, db, bracket['challonge']['id'], match_id, winner, bracket)
     confirm_embed = edit_match_embed_confirmed(embed, winner)
     await match_message.edit(embed=confirm_embed)
     print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
@@ -163,9 +166,9 @@ async def delete_match(self: Client, db: Database, match_id: int, message_id: in
     # Delete from database
     return await mdb.delete_document(db, {"match_id": match_id}, MATCHES)
 
-async def update_match_score(self: Client, db: Database, challonge_id: int, match_id: int, winner):
+async def report_match(self: Client, message: Message, db: Database, challonge_id: int, match_id: int, winner: str, bracket):
     """
-    Updates a match on challonge and in the database.
+    Reports a match winner and fetches the next matches that have not yet been called.
     """
     if winner == '1️⃣':
         score = "1-0"
@@ -176,6 +179,10 @@ async def update_match_score(self: Client, db: Database, challonge_id: int, matc
     await mdb.update_single_field(db, {'match_id': match_id}, { '$set': {'completed': datetime.now(), 'winner': winner}}, MATCHES)
 
     # TODO: Check for matches that have not yet been called
+    # Send messages for each of the initial open matches
+    matches = challonge.matches.index(bracket['challonge']['id'], state='open')
+    for match in matches:
+       await add_match(self, message, db, bracket, match)
 
 async def override_match_score(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
@@ -208,7 +215,7 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
 
     player = match['player1'] if winner == '1️⃣' else match['player2']
     # Update message
-    await update_match_score(self, db, bracket['challonge']['id'], match_id, player)
+    await report_match(self, message, db, bracket['challonge']['id'], match_id, player, bracket)
     confirm_embed = edit_match_embed_confirmed(match_message.embeds[0], player)
     await match_message.edit(embed=confirm_embed)
     print("Succesfully overwrote match [id={0}]. Winner = '{1}'".format(match_id, player['name']))
