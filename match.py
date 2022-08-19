@@ -16,17 +16,13 @@ BRACKETS = 'brackets'
 MATCHES = 'matches'
 ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-bd10359b8556-profile_image-70x70.png'
 
-def create_match_embed(bracket_name: str, player1_id: int, player2_id: int, round: int, jump_url: str):
+def create_match_embed(bracket, player1_id: int, player2_id: int, round: int, jump_url: str, match_id: int):
     """
     Creates embed object to include in match message.
     """
-    if round > 0:
-        round_str = f"Winners Round {round}"
-    else:
-        round_str = f"Losers Round {round}"
     time = datetime.now().strftime("%#I:%M %p")
-    embed = Embed(title=round_str, description=f"Results Pending\nOpened at {time}", color=0x50C878)
-    embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
+    embed = Embed(title=get_round_name(bracket, match_id, round), description=f"Results Pending\nOpened at {time}", color=0x50C878)
+    embed.set_author(name=bracket['name'], url=jump_url, icon_url=ICON)
     embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
     # embed.add_field(name=f'Bracket Link', value=url, inline=False)
     embed.set_footer(text="React with 1️⃣ or 2️⃣ to report the winner.")
@@ -69,7 +65,7 @@ async def add_match(self: Client, message: Message, db: Database, bracket, match
     player2= list(filter(lambda entrant: (entrant['challonge_id'] == match['player2_id']), bracket['entrants']))[0]
     player1_id = player1['discord_id']
     player2_id = player2['discord_id']
-    embed = create_match_embed(bracket['name'], player1_id, player2_id, match['round'], bracket['jump_url'])
+    embed = create_match_embed(bracket, player1_id, player2_id, match['round'], bracket['jump_url'], match['id'])
     match_message = await message.channel.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed)
     
     # React to match message
@@ -130,8 +126,9 @@ async def add_match(self: Client, message: Message, db: Database, bracket, match
                 dispute_embed = edit_match_embed_dispute(embed)
                 await match_message.edit(embed=dispute_embed)
         elif player1_vote or player2_vote:
-            # Start auto-confirm timer
+            # TODO: Start auto-confirm timer
             pass
+        # TODO: Exit if overwritten
 
     # Make sure both votes are the same
     if player1_vote == '1️⃣':
@@ -195,8 +192,13 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
 
     winner = argv[2]
     # Make sure valid winner was provided
-    valid = ['1️⃣', '2️⃣']
-    if winner not in valid:
+    valid1 = ['1', '1️⃣']
+    valid2 = ['2', '2️⃣']
+    if winner in valid1:
+        winner = '1️⃣'
+    elif winner in valid2:
+        winner = '2️⃣'
+    else:
         return await message.channel.send(usage) 
 
     # Make sure replying to a match message
@@ -216,6 +218,7 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     player = match['player1'] if winner == '1️⃣' else match['player2']
     # Update message
     await report_match(self, message, db, bracket['challonge']['id'], match_id, player, bracket)
+    # Not getting here
     confirm_embed = edit_match_embed_confirmed(match_message.embeds[0], player)
     await match_message.edit(embed=confirm_embed)
     print("Succesfully overwrote match [id={0}]. Winner = '{1}'".format(match_id, player['name']))
@@ -229,3 +232,38 @@ def report_match_reaction(reaction: Reaction, user: User, check_id: int):
     # Check who reacted to the message
     if user.id == check_id:
         return str(reaction.emoji)
+
+def get_round_name(bracket, match_id, round):
+    """
+    Returns string value of round number based on number of rounds in a bracket.
+    """
+    num_rounds = bracket['num_rounds']
+    if round > 0:
+        # Winners Bracket
+        match num_rounds - round:
+            case 0:
+                matches = challonge.matches.index(bracket['challonge']['id'])
+                matches.sort(reverse=True, key=(lambda match: match['id']))
+                if match_id != matches[0]['id']:
+                    return "Grand Finals Set 1"
+                else:
+                    return "Grand Finals Set 2"
+            case 1:
+                return "Winners Finals"
+            case 2:
+                return "Winners Semifinals"
+            case 3: 
+                return "Winners Quarterfinals"
+            case _:
+                return f"Winners Round {round}"
+    else:
+        # Losers Bracket
+        match abs(num_rounds - round):
+            case 0:
+                return "Losers Finals"
+            case 1:
+                return "Losers Semiinals"
+            case 2:
+                return "Losers Quarterfinals"
+            case _:
+                return f"Losers Round {round}"

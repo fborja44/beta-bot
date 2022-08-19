@@ -36,10 +36,12 @@ load_dotenv()
 # argv = test[:match[0]].split()
 # print(argv)
 
-# CHALLONGE_USER = os.getenv('CHALLONGE_USER')
-# CHALLONGE_KEY = os.getenv('CHALLONGE_KEY')
+CHALLONGE_USER = os.getenv('CHALLONGE_USER')
+CHALLONGE_KEY = os.getenv('CHALLONGE_KEY')
 
-# challonge.set_credentials(CHALLONGE_USER, CHALLONGE_KEY)
+SAMPLE_ID = 'pyh27p4s'
+
+challonge.set_credentials(CHALLONGE_USER, CHALLONGE_KEY)
 
 # tournament = challonge.tournaments.create(name="Test", url=None, tournament_type='double elimination', start_at=datetime.now(), show_rounds=True, private=True)
 # print(tournament)
@@ -55,5 +57,14 @@ load_dotenv()
 # response = challonge.tournaments.destroy(tournament['id'])
 # print(response)
 
-message_arr = re.split(" +| *- *", "Mang0 3 - 2 Zain")
-print(message_arr)
+tourney = challonge.tournaments.show(SAMPLE_ID, include_participants=1, include_matches=1)
+participants = tourney['participants']
+participants.sort(key=(lambda entrant: entrant['participant']['final_rank']))
+print(participants)
+
+# matches = challonge.matches.index(SAMPLE_ID)
+# matches.sort(reverse=True, key=(lambda match: match['id']))
+# print(matches)
+
+# tourney = challonge.tournaments.show(SAMPLE_ID, include_participants=1)
+# print(tourney['participants'])
