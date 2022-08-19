@@ -93,6 +93,7 @@ async def register_cmd(self, message, db: Database, argv: list, argc: int):
     else:
         msg = "Failed to create new command."
     await message.channel.send(msg)
+    return cmd
 
 async def call_cmd(self, message, db: Database, argv: list, argc: int):
     """

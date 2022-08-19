@@ -1,6 +1,6 @@
 from cgi import print_exception
 from datetime import datetime, timedelta, date
-from discord import Client, Embed, Message,  RawReactionActionEvent, TextChannel
+from discord import Client, Embed, Message, Member, RawReactionActionEvent, TextChannel
 from gridfs import Database
 from logger import printlog, printlog_message
 from pprint import pprint
@@ -35,20 +35,21 @@ async def parse_args(self: Client, message: Message, db: Database, usage: str, a
         if not bracket and send:
             await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
             return (None, None)
-    elif argc >= f_argc + 1:
+    elif argc < f_argc + 1:
         # Get most recent bracket that has not yet been completed
-        bracket = await mdb.find_most_recent_document(db, {'completed', False}, BRACKETS)
+        bracket = await mdb.find_most_recent_document(db, {'completed': False}, BRACKETS)
+        bracket_name = bracket['name']
         if not bracket and send:
             await message.channel.send(f"There are currently no open brackets.")
             return (None, None)
     return (bracket, bracket_name)
 
-def create_bracket_embed(name: str, author, time, url, entrants: list=[], status: str="Open for Registration  🚨"):
+def create_bracket_embed(name: str, author, time: datetime, url, entrants: list=[], status: str="Open for Registration  🚨"):
     """
     Creates embed object to include in bracket message.
     """
     embed = Embed(title=f'🥊  {name}', description=f"Status:  {status}", color=0x6A0DAD)
-    time_str = time.strftime("%A, %B %d, %Y %I:%M %p") # time w/o ms
+    time_str = time.strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
     embed.add_field(name='Starting At', value=time_str, inline=False)
     if len(entrants) > 0:
         entrants_content = ""
@@ -184,11 +185,10 @@ async def update_bracket_entrants(self: Client, payload: RawReactionActionEvent,
     if not bracket or not bracket['open']:
         return # Do not respond
     if payload.event_type=='REACTION_ADD':
-        await add_entrant(self, db, bracket, payload.message_id, payload.user_id, payload.channel_id, payload.member)
+        await add_entrant(self, db, bracket, payload.message_id, payload.channel_id, payload.member)
     elif payload.event_type=='REACTION_REMOVE':
         await remove_entrant(self, db, bracket, payload.message_id, payload.user_id, payload.channel_id)
     
-
 async def edit_bracket_message(self: Client, bracket, channel: TextChannel, status='🚨  Open for Registration 🚨'):
     """
     Edits bracket embed message in a channel.
@@ -237,7 +237,7 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
      # Set bracket to completed in database
     updated_bracket = await mdb.update_single_field(db, {'message_id': bracket['message_id']}, {'$set': {'completed': True}}, BRACKETS)
     # Update embed message
-    await edit_bracket_message(self, updated_bracket, message.channel, status='Completed ⬛')
+    await edit_bracket_message(self, updated_bracket, message.channel, status='Completed 🏁')
     print(f"Finalized bracket '{bracket_name}' [id={bracket['message_id']}].")
 
     channel = self.get_channel(message.channel.id)
@@ -258,6 +258,7 @@ async def create_test_bracket(self: Client, message: Message, db: Database, argv
     Testing function. Creates a test bracket and adds two entrants.
     """
     bracket_name = "Test Bracket"
+    bracket_db , bracket_message , bracket_challonge = None, None, None
     # Delete previous test bracket if it exists
     try:
         bracket = await get_bracket(self, db, bracket_name)
@@ -272,11 +273,11 @@ async def create_test_bracket(self: Client, message: Message, db: Database, argv
         id1 = 133296144003497985
         member1 = message.guild.get_member_named('beta#3096')
         print(message.channel)
-        await add_entrant(self, db, bracket_db, message.id, id1, message.channel, member1)
+        await add_entrant(self, db, bracket_db, message.id, message.channel, member1)
         # Add second entrant
         id2 = 917549286978371584
         member2 = message.guild.get_member_named("pika!#3722")
-        await add_entrant(self, db, bracket_db, message.id, id2, message.channel, member2)
+        await add_entrant(self, db, bracket_db, message.id, message.channel, member2)
     except Exception as e:
         await printlog_message("Failed to create test bracket.", "Something went wrong when creating the bracket.", message)
         print_exception(e)
@@ -284,8 +285,7 @@ async def create_test_bracket(self: Client, message: Message, db: Database, argv
             argv = ["$bracket", "delete", bracket_name]
             await delete_bracket(self, message, db, argv, len(argv))
 
-# TODO: clean up arguments
-async def add_entrant(self: Client, db: Database, bracket, message_id: int, member_id: int, channel: TextChannel, member):
+async def add_entrant(self: Client, db: Database, bracket, message_id: int, channel: TextChannel, member: Member):
     """
     Adds an entrant to a bracket.
     """
@@ -293,14 +293,14 @@ async def add_entrant(self: Client, db: Database, bracket, message_id: int, memb
     # Add user to challonge bracket
     response = challonge.participants.create(bracket['challonge']['id'], member.name)
     # Add user to entrants list
-    entrant = {'name': member.name, 'discord_id': member_id, 'challonge_id': response['id']}
+    entrant = {'name': member.name, 'discord_id': member.id, 'challonge_id': response['id']}
     updated_bracket = await mdb.update_single_field(db, {'name': bracket['name']}, {'$push': {'entrants': entrant}}, BRACKETS)
     if updated_bracket:
-        print(f"Added entrant '{member.name}' [id='{member_id}'] to bracket [id='{message_id}'].")
+        print(f"Added entrant '{member.name}' [id='{member.id}'] to bracket [id='{message_id}'].")
         # Update message
         await edit_bracket_message(self, updated_bracket, channel)
     else:
-        print(f"Failed to add entrant '{member.name}' [id='{member_id}'] to bracket [id='{message_id}'].")
+        print(f"Failed to add entrant '{member.name}' [id='{member.id}'] to bracket [id='{message_id}'].")
 
 async def remove_entrant(self: Client, db: Database, bracket, message_id: int, member_id: int, channel: TextChannel):
     """

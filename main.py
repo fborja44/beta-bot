@@ -10,6 +10,7 @@ import challonge
 import discord
 import favorite
 import logging
+import match
 import os
 
 # main.py
@@ -101,6 +102,8 @@ class MyBot(discord.Client):
                     await bracket.start_bracket(self, message, db, argv, argc)
                 case "finalize":
                     await bracket.finalize_bracket(self, message, db, argv, argc)
+                case "override":
+                    await match.override_match_score(self, message, db, argv, argc)
                 case "test":
                     await bracket.create_test_bracket(self, message, db, argv, argc)
                 case _:

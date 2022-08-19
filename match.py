@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, date
-from discord import Client, Embed,  Message, Reaction, User
+from discord import Client, Embed, Message, Reaction, User
 from gridfs import Database
 from logger import printlog
 from pprint import pprint
 import asyncio
+import bracket as _bracket
 import challonge
 import mdb
 import re
@@ -23,7 +24,7 @@ def create_match_embed(bracket_name: str, player1_id: int, player2_id: int, roun
         round_str = f"Winners Round {round}"
     else:
         round_str = f"Losers Round {round}"
-    time = datetime.now().strftime("%I:%M %p")
+    time = datetime.now().strftime("%#I:%M %p")
     embed = Embed(title=round_str, description=f"Results Pending\nOpened at {time}", color=0x50C878)
     embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
     embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
@@ -43,7 +44,7 @@ def edit_match_embed_confirmed(embed: Embed, winner):
     """
     Updates embed object for confirmed match
     """
-    time = datetime.now().strftime("%I:%M %p")
+    time = datetime.now().strftime("%#I:%M %p")
     embed.description = f"Winner: {winner['name']}\nFinished at {time}"
     if len(embed.fields) > 1:
         # Remove dispute field
@@ -89,10 +90,9 @@ async def add_match(self: Client, message: Message, db: Database, bracket, match
     await mdb.add_document(db, new_match, MATCHES)
     match_id = new_match['match_id']
 
-    # Add match id to bracket document
+    # Add match id and message id to bracket document
     try:
-        print(match_id)
-        await mdb.update_single_field(db, {'name': bracket['name']}, {'$push': {'matches': {'match_id', match_id}}}, BRACKETS)
+        await mdb.update_single_field(db, {'name': bracket['name']}, {'$push': {'matches': {'match_id': match_id, 'message_id': match_message.id}}}, BRACKETS)
     except:
         print("Failed to add match to bracket document.")
 
@@ -137,9 +137,9 @@ async def add_match(self: Client, message: Message, db: Database, bracket, match
         winner = player2
     # Update score
     await update_match_score(self, db, bracket['challonge']['id'], match_id, winner, embed)
-    embed = edit_match_embed_confirmed(embed, winner)
-    print("Succesfully reported match [id={0}]. Winner = '{1}'".format(match_id, winner['name']))
-
+    confirm_embed = edit_match_embed_confirmed(embed, winner)
+    await match_message.edit(embed=confirm_embed)
+    print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
 
 async def delete_match(self: Client, db: Database, match_id: int, message_id: int, channel_id: int):
     """
@@ -171,14 +171,49 @@ async def update_match_score(self: Client, db: Database, challonge_id: int, matc
         score = "1-0"
     else:
         score = "0-1"
+    print("here")
     challonge.matches.update(challonge_id, match_id, scores_csv=score,winner_id=winner['challonge_id'])
     await mdb.update_single_field(db, {'match_id': match_id}, { '$set': {'completed': datetime.now(), 'winner': winner}}, MATCHES)
 
+    # TODO: Check for matches that have not yet been called
 
-async def override_match_score():
+async def override_match_score(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
-    Overrides the results of a reported match.
+    Overrides the results of a match. The status of the match does not matter.
+    Only usable by bracket creator or bracket manager
     """
+    usage = "Usage: `$bracket override <1️⃣ | 2️⃣>`. Must be in a reply to a match"
+    if argc < 3 or not message.reference:
+        return await message.channel.send(usage)
+
+    winner = argv[2]
+    # Make sure valid winner was provided
+    valid = ['1️⃣', '2️⃣']
+    if winner not in valid:
+        return await message.channel.send(usage) 
+
+    # Make sure replying to a match message
+    match_message = await message.channel.fetch_message(message.reference.message_id)
+    match = await mdb.find_document(db, {'message_id': match_message.id}, MATCHES)
+    if not match:
+        return await message.channel.send("Score override must be in reply to a match message.")
+
+    # Get bracket the match is in
+    match_id = match['match_id']
+    bracket_name = match['bracket']['name']
+    bracket = await _bracket.get_bracket(self, db, bracket_name)
+    if not bracket:
+        printlog(f"Failed to get bracket ['name'={bracket_name}] for match ['id'={match_id}].")
+        return False
+
+    player = match['player1'] if winner == '1️⃣' else match['player2']
+    # Update message
+    await update_match_score(self, db, bracket['challonge']['id'], match_id, player)
+    confirm_embed = edit_match_embed_confirmed(match_message.embeds[0], player)
+    await match_message.edit(embed=confirm_embed)
+    print("Succesfully overwrote match [id={0}]. Winner = '{1}'".format(match_id, player['name']))
+    await message.channel.send("Succesfully overwrote match result. Bracket updated.")
+    return True
 
 def report_match_reaction(reaction: Reaction, user: User, check_id: int):
     """
@@ -187,61 +222,3 @@ def report_match_reaction(reaction: Reaction, user: User, check_id: int):
     # Check who reacted to the message
     if user.id == check_id:
         return str(reaction.emoji)
-
-async def report_match_message(self: Client, message: Message, db: Database, match):
-    """
-    UNUSED + UNFINISHED
-    Reports a score for a match using a reply.
-    """
-    # Split message into strings by space
-    # First found name: player 1
-    # First found number: player 1 score
-    # Second found valid name: player 2
-    # Second found number: player 2 score
-    message_arr = re.split(" +| *- *| *, *", message.content)
-    player1_name = match['player1']['name']
-    player2_name = match['player2']['name']
-    name1 = None
-    name2 = None
-    score1 = None
-    score2 = None
-
-    for item in message_arr:
-        if not name1 and item.lower() == player1_name.lower():
-            name1 = player1_name
-        elif not name2 and item.lower() == player2_name.lower():
-            name2 = player2_name
-        elif name1 and not score1 and item.isnumeric():
-            score1 = int(item)
-        elif name2 and not score2 and item.isnumeric():
-            score2 = int(item)
-        if name1 and name2 and score1 != None and score2 != None:
-            break
-    if not name1 or not name2 or score1 == None or score2 == None:
-        message.channel.send("Invalid score. Try the format '\{name\} \{score\} - \{score\} \{name\}'")
-        return False
-    winner = match['player1']['challonge_id'] if score1 > score2 else match['player2']['challonge_id']
-    # Wait for confirmation from other player
-    user2 = self.get_user(match['player2']['discord_id'])
-    def check(reaction,  user):
-        return reaction.message.id == message.id and user == user2
-    try:
-        reaction, user = await self.wait_for('reaction_add', timeout=90.0, check=check)
-    except asyncio.TimeoutError:
-        # automatically confirm
-        confirmed = True
-    else:
-        # Check reaction emote
-        if str(reaction.emoji) == '✅':
-            confirmed = True
-        elif str(reaction.emoji) == '❌':
-            return False
-
-    # Report score on challonge
-    challonge.matches.update(match['bracket']['challonge_id'], match['id'], f"{score1}-{score2}", winner)
-
-    # Update message
-
-    # Check for matches that have not yet been called
-
-    return confirmed

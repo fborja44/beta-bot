@@ -22,7 +22,7 @@ async def find_document(db: Database, target, collection: str, message=None, sen
         printlog(f"DB_ERROR: Failed to find document in [{collection}]:\ntarget=[{target}]")
         return
     if message and send_text:
-        message.channel.send(send_text)
+        await message.channel.send(send_text)
     return document
 
 async def find_most_recent_document(db: Database, target, collection: str, message=None, send_text=None):
@@ -30,12 +30,12 @@ async def find_most_recent_document(db: Database, target, collection: str, messa
     Finds the most recently added document in the database.
     """
     try:
-        document = db[collection].find_one(target, sort=[{'_id': DESCENDING }])
+        document = db[collection].find_one(target, sort=[('_id', DESCENDING )])
     except:
-        printlog(f"DB_ERROR: Failed to retrieve most recent document in [{collection}]:\n")
+        printlog(f"DB_ERROR: Failed to retrieve most recent document in [{collection}]:\ntarget=[{target}]")
         return
     if message and send_text:
-        message.channel.send(send_text)
+        await message.channel.send(send_text)
     return document
 
 async def add_document(db: Database, document, collection, message=None, send_text=None):
@@ -50,7 +50,7 @@ async def add_document(db: Database, document, collection, message=None, send_te
     if inserted_id:
         printlog(f"Successfully added document to [{collection}]:\n{document}")
         if message and send_text:
-            message.channel.send(send_text)
+            await message.channel.send(send_text)
         return inserted_id
     else:
         printlog(f"Could not add document to [{collection}]:\n{document}")
@@ -67,7 +67,7 @@ async def delete_document(db: Database, target, collection: str, message=None, s
     if result.deleted_count > 0:
         printlog(f"Successfully removed document from [{collection}]:\ntarget=[{target}]")
         if message and send_text:
-            message.channel.send(send_text)
+            await message.channel.send(send_text)
         return result
     else:
         printlog(f"Could not find/delete document in [{collection}]:\ntarget=[{target}]")
@@ -84,7 +84,7 @@ async def update_single_field(db: Database, target, update_obj, collection: str,
     if document:
         printlog(f"Successfully updated document in [{collection}]:\n{document}")
         if message and send_text:
-            message.channel.send(send_text)
+            await message.channel.send(send_text)
         return document
     else:
         printlog(f"Could not find/update document in [{collection}]:\ntarget=[{target}]")
