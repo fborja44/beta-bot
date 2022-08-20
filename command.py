@@ -53,7 +53,9 @@ async def register_cmd(self, message, db: Database, argv: list, argc: int):
     cmd = {
         "name": cmd_name,
         "content": cmd_content,
-        "author": { "username": message.author.name, "id": message.author.id },
+        "author": { 
+            "username": message.author.name, 
+            "id": message.author.id },
         "argc": 0
     }
 

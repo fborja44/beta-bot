@@ -46,9 +46,14 @@ async def update_favorite(self: Client, payload: RawReactionActionEvent, db: Dat
     # New message document
     msg = {
         "message_id": message.id,
-        "channel": { "id": message.channel.id, "name": message.channel.name, 
-                    "nsfw": message.channel.nsfw, "category": message.channel.category_id },
-        "author": {"username": message.author.name, "id": message.author.id}
+        "channel": { 
+            "id": message.channel.id, 
+            "name": message.channel.name, 
+            "nsfw": message.channel.nsfw, 
+            "category": message.channel.category_id },
+        "author": {
+            "username": message.author.name, 
+            "id": message.author.id }
     }
     
     # Get star count

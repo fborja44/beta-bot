@@ -16,12 +16,16 @@ BRACKETS = 'brackets'
 MATCHES = 'matches'
 ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-bd10359b8556-profile_image-70x70.png'
 
-def create_match_embed(bracket, player1_id: int, player2_id: int, round: int, match_id: int):
+def create_match_embed(bracket, match):
     """
     Creates embed object to include in match message.
     """
     bracket_name = bracket['name']
+    match_id = match['match_id']
     jump_url = bracket['jump_url']
+    round = match['round']
+    player1_id = match['player1']['discord_id']
+    player2_id = match['player2']['discord_id']
     time = datetime.now().strftime("%#I:%M %p")
     embed = Embed(title=get_round_name(bracket, match_id, round), description=f"Results Pending\nOpened at {time}", color=0x50C878)
     embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
@@ -34,7 +38,7 @@ def edit_match_embed_dispute(embed: Embed):
     """
     Updates embed object for disputes.
     """
-    embed.add_field(name="Dispute Detected 🛑", value="Contact a bracket manager or change reaction to resolve.")
+    embed.add_field(name="🛑 Dispute Detected 🛑", value="Contact a bracket manager or change reaction to resolve.")
     embed.color = 0xD4180F
     return embed
 
@@ -43,7 +47,7 @@ def edit_match_embed_confirmed(embed: Embed, winner):
     Updates embed object for confirmed match
     """
     time = datetime.now().strftime("%#I:%M %p")
-    embed.description = f"Winner: {winner['name']}\nFinished at {time}"
+    embed.description = f"Winner: **{winner['name']}**\nFinished at {time}"
     if len(embed.fields) > 1:
         # Remove dispute field
         embed.remove_field(1)
@@ -57,42 +61,47 @@ async def get_match(self: Client, db: Database, match_id: int):
     """
     return await mdb.find_document(db, {"match_id": match_id}, MATCHES)
 
-async def add_match(self: Client, message: Message, db: Database, bracket, match):
+async def add_match(self: Client, message: Message, db: Database, bracket, challonge_match):
     """
     Creates a new match.
     """
     # Create match message and embed
     # Get player names
-    player1 = list(filter(lambda entrant: (entrant['challonge_id'] == match['player1_id']), bracket['entrants']))[0]
-    player2= list(filter(lambda entrant: (entrant['challonge_id'] == match['player2_id']), bracket['entrants']))[0]
+    player1 = list(filter(lambda entrant: (entrant['challonge_id'] == challonge_match['player1_id']), bracket['entrants']))[0]
+    player2= list(filter(lambda entrant: (entrant['challonge_id'] == challonge_match['player2_id']), bracket['entrants']))[0]
     player1_id = player1['discord_id']
     player2_id = player2['discord_id']
-    embed = create_match_embed(bracket, player1_id, player2_id, match['round'], match['id'])
+
+    player1['vote'] = None
+    player2['vote'] = None
+    new_match = {
+        "match_id": challonge_match['id'],
+        "message_id": None,
+        "bracket": {
+            'name': bracket['name'], 
+            'message_id': bracket['message_id'], 
+            'challonge_id': bracket['challonge']['id'] },
+        "player1": player1,
+        "player2": player2,
+        "round": challonge_match['round'],
+        'completed': False,
+        "winner": None
+    }
+
+    # Send embed message
+    embed = create_match_embed(bracket, new_match)
     match_message = await message.channel.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed)
-    
     # React to match message
     await match_message.add_reaction('1️⃣')
     await match_message.add_reaction('2️⃣')
 
     # Add match document to database
-    player1['vote'] = None
-    player2['vote'] = None
-    new_match = {
-        "match_id": match['id'],
-        "message_id": match_message.id,
-        "bracket": {'name': bracket['name'], 'message_id': bracket['message_id'], 'challonge_id': bracket['challonge']['id']},
-        "player1": player1,
-        "player2": player2,
-        "round": match['round'],
-        'completed': False,
-        "winner": None
-    }
+    new_match['message_id'] = match_message.id
     try:
         await mdb.add_document(db, new_match, MATCHES)
     except:
         return
     match_id = new_match['match_id']
-
     # Add match id and message id to bracket document
     try:
         await mdb.update_single_document(db, {'name': bracket['name']}, {'$push': {'matches': {'match_id': match_id, 'message_id': match_message.id}}}, BRACKETS)
@@ -100,25 +109,24 @@ async def add_match(self: Client, message: Message, db: Database, bracket, match
         print("Failed to add match to bracket document.")
     return new_match
 
-async def delete_match(self: Client, db: Database, match_id: int, message_id: int, channel_id: int):
+async def delete_match(self: Client, message: Message, db: Database, match):
     """
     Adds a new match document to the database.
     """
-    # Check if match already exists
-    try:
-        match = await get_match(self, db, match_id)
-        if not match:
-            return
-    except:
-        pass
+    match_id = match['match_id']
     # Delete match message
     try:
-        channel = self.get_channel(channel_id)
-        match_message = await channel.fetch_message(message_id)
+        match_message = await message.channel.fetch_message(match['message_id'])
         await match_message.delete() # delete message from channel
     except:
         print(f"Failed to delete message for match [id='{match_id}']")
-
+    # Check if match is in database
+    try:
+        match = await get_match(self, db, match_id)
+        if not match:
+            return False
+    except:
+        return False
     # Delete from database
     return await mdb.delete_document(db, {"match_id": match_id}, MATCHES)
 
@@ -188,8 +196,11 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
         except:
             pass
     elif payload.event_type == 'REACTION_REMOVE':
-        vote = None
-        action = "removed"
+        if match['player1']['vote'] == payload.emoji.name: # Removed vote
+            vote = None
+        else:
+            return False # Switched vote
+        action = "Removed"
     try:
         player1 = match['player1']
         player2 = match['player2']
@@ -200,7 +211,8 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
             player2['vote'] = vote
             updated_match = await mdb.update_single_document(db, {'match_id': match_id}, {'$set': {'player2': player2}}, MATCHES)
         print(f"{action} vote by user ['discord_id'='{payload.user_id}'] for match ['match_id'={match_id}']")
-    except:
+    except Exception as e:
+        print(e)
         print(f"Failed to record vote by user ['discord_id'='{payload.user_id}'] for match ['match_id'='{match_id}'].")
         return False
     if not updated_match:
@@ -228,7 +240,6 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
             await match_message.edit(embed=dispute_embed)
     return True
     
-
 async def override_match_score(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
     Overrides the results of a match. The status of the match does not matter.
@@ -269,7 +280,6 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     # Report match
     await report_match(self, match_message, db, bracket, match, winner_emote)
     print("Succesfully overwrote match [id={0}]. Winner = '{1}'".format(match_id, winner['name']))
-    await message.channel.send("Succesfully overwrote match result. Bracket updated.")
     return True
 
 def get_round_name(bracket, match_id, round):
@@ -281,12 +291,15 @@ def get_round_name(bracket, match_id, round):
         # Winners Bracket
         match num_rounds - round:
             case 0:
-                matches = challonge.matches.index(bracket['challonge']['id'])
-                matches.sort(reverse=True, key=(lambda match: match['id']))
-                if match_id != matches[0]['id']:
-                    return "Grand Finals Set 1"
-                else:
-                    return "Grand Finals Set 2"
+                try:
+                    matches = challonge.matches.index(bracket['challonge']['id'])
+                    matches.sort(reverse=True, key=(lambda match: match['id']))
+                    if match_id != matches[0]['id']:
+                        return "Grand Finals Set 1"
+                    else:
+                        return "Grand Finals Set 2"
+                except:
+                    return "Grand Finals"
             case 1:
                 return "Winners Finals"
             case 2:
