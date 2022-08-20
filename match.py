@@ -142,8 +142,17 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
     elif winner_emote == '2️⃣':
         winner = match['player2']
         score = '0-1'
-    challonge.matches.update(bracket_challonge_id, match_id, scores_csv=score,winner_id=winner['challonge_id'])
-    await mdb.update_single_document(db, {'match_id': match_id}, { '$set': {'completed': datetime.now(), 'winner': winner}}, MATCHES)
+    try:    
+        challonge.matches.update(bracket_challonge_id, match_id, scores_csv=score,winner_id=winner['challonge_id'])
+    except Exception as e:
+        printlog(f"Something went wrong when reporting match ['match_id'={match_id}] on challonge.")
+        print(e)
+        return False
+    try:
+        await mdb.update_single_document(db, {'match_id': match_id}, { '$set': {'completed': datetime.now(), 'winner': winner}}, MATCHES)
+    except:
+        print(f"Failed to report match ['match_id'={match_id}] in database.")
+        return False
 
     match_embed = match_message.embeds[0]
     confirm_embed = edit_match_embed_confirmed(match_embed, winner)
@@ -151,7 +160,12 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
     print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
 
     # Check for matches that have not yet been called
-    matches = challonge.matches.index(bracket['challonge']['id'], state='open')
+    try:
+        matches = challonge.matches.index(bracket['challonge']['id'], state='open')
+    except Exception as e:
+        printlog("Failed to get new matches.")
+        print(e)
+        return False
     for match in matches:
        await add_match(self, match_message, db, bracket, match)
 
@@ -279,7 +293,7 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     winner = match['player1'] if winner_emote == '1️⃣' else match['player2']
     # Report match
     await report_match(self, match_message, db, bracket, match, winner_emote)
-    print("Succesfully overwrote match [id={0}]. Winner = '{1}'".format(match_id, winner['name']))
+    print("Match succesfully overwritten.")
     return True
 
 def get_round_name(bracket, match_id, round):
