@@ -72,7 +72,7 @@ async def delete_document(db: Database, target, collection: str, message=None, s
     else:
         printlog(f"Could not find/delete document in [{collection}]:\ntarget=[{target}]")
 
-async def update_single_field(db: Database, target, update_obj, collection: str, message=None, send_text=None):
+async def update_single_document(db: Database, target, update_obj, collection: str, message=None, send_text=None):
     """
     Updates a single field in a document in the specifed collection.
     """

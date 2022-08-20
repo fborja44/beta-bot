@@ -58,9 +58,12 @@ class MyBot(discord.Client):
         if payload.emoji.name == '⭐':
             # Update favorites
             await favorite.update_favorite(self, payload, db)
-        elif payload.emoji.name =='✅':
+        elif payload.emoji.name == '✅':
             # Update bracket entrants
             await bracket.update_bracket_entrants(self, payload, db)
+        elif payload.emoji.name == '1️⃣' or payload.emoji.name == '2️⃣':
+            # Update match vote
+            await match.vote_match_reaction(self, payload, db)
     
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
         # Check if reacting to self 
@@ -69,9 +72,12 @@ class MyBot(discord.Client):
         if payload.emoji.name == '⭐':
             # Update favorites
             await favorite.update_favorite(self, payload, db)
-        elif payload.emoji.name =='✅':
+        elif payload.emoji.name == '✅':
             # Update bracket entrants
             await bracket.update_bracket_entrants(self, payload, db)
+        elif payload.emoji.name == '1️⃣' or payload.emoji.name == '2️⃣':
+            # Update match vote
+            await match.vote_match_reaction(self, payload, db)
 
     async def on_message(self, message: Message): # Event went the bot receives a message
         if message.author == bot_client.user: # Checks if message is from self

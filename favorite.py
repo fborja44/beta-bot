@@ -60,7 +60,7 @@ async def update_favorite(self: Client, payload: RawReactionActionEvent, db: Dat
         if not await mdb.find_document(db, {'message_id': message.id}, FAVORITES):
             message = await add_favorite(self, msg, db)
         else:
-            message = await mdb.update_single_field(db, {'message_id': message.id}, {'$set': {'star_count': msg['star_count']}}, FAVORITES)
+            message = await mdb.update_single_document(db, {'message_id': message.id}, {'$set': {'star_count': msg['star_count']}}, FAVORITES)
     else:
         # No star reactions; Remove from favorites if exists
         if await mdb.find_document(db, {'message_id': message.id}, FAVORITES):

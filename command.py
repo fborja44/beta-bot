@@ -120,7 +120,7 @@ async def call_cmd(self, message, db: Database, argv: list, argc: int):
 
         # Print with counter
         if 'count' in cmd.keys():
-            result = await mdb.update_single_field(db, {'name': cmd_name}, {'$inc': {'count': 1}}, COMMANDS)
+            result = await mdb.update_single_document(db, {'name': cmd_name}, {'$inc': {'count': 1}}, COMMANDS)
             if result:
                 print(f"Incremented count for command '{cmd_name}'.")
                 new_count = str(cmd['count']+1)
@@ -165,7 +165,7 @@ async def edit_cmd(self, message, db: Database, argv: list, argc: int):
 
     cmd_name = argv[1]
     # Get command from database and update
-    cmd = await mdb.update_single_field(db, {"name": cmd_name}, {'$set': {'content': cmd_content}}, COMMANDS)
+    cmd = await mdb.update_single_document(db, {"name": cmd_name}, {'$set': {'content': cmd_content}}, COMMANDS)
     # Command does not exist
     if cmd:
         msg = f"Successfully edited command '{cmd_name}'."
