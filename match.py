@@ -71,26 +71,36 @@ async def add_match(self: Client, message: Message, db: Database, bracket, chall
         print("Failed to add match to bracket document.")
     return new_match
 
-async def delete_match(self: Client, message: Message, db: Database, match):
+async def delete_match(self: Client, message: Message, db: Database, bracket, match_id: int):
     """
-    Adds a new match document to the database.
+    Deletes a match.
     """
-    match_id = match['match_id']
+    bracket_name = bracket['name']
+    # Check if match is in database
+    try:
+        match = await get_match(self, db, match_id)
+    except:
+        print("Something went wrong when checking database for match ['match_id'={match_id}].")
+    if match:
+        # Delete from matches database
+        try:
+            await mdb.delete_document(db, {"match_id": match_id}, MATCHES)
+        except:
+            print(f"Failed to delete match [id='{match_id}'] from database.")
+            return False
     # Delete match message
     try:
         match_message = await message.channel.fetch_message(match['message_id'])
         await match_message.delete() # delete message from channel
     except:
-        print(f"Failed to delete message for match [id='{match_id}']")
-    # Check if match is in database
+        printlog(f"Failed to delete message for match [id='{match_id}']. May not exist.")
+    # Remove from bracket's matches list
     try:
-        match = await get_match(self, db, match_id)
-        if not match:
-            return False
+        await mdb.update_single_document(db, {'name': bracket_name}, {'$pull': {'matches': {'match_id': match_id}}}, BRACKETS)
     except:
+        print(f"Failed to remove match [id='{match_id}'] from bracket ['name': '{bracket_name}'] document.")
         return False
-    # Delete from database
-    return await mdb.delete_document(db, {"match_id": match_id}, MATCHES)
+    return True
 
 async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db: Database):
     """
@@ -230,7 +240,7 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
         new_match = await add_match(self, match_message, db, bracket, challonge_match)
         # Add new match message_id to old match's next_matches list
         try:
-            await mdb.update_single_document(db, {'match_id': match_id}, {'$push': {'next_matches': new_match['message_id']}}, MATCHES)
+            await mdb.update_single_document(db, {'match_id': match_id}, {'$push': {'next_matches': new_match['match_id']}}, MATCHES)
         except:
             print(f"Failed to add new match ['match_id'='{new_match['match_id']}'] to next_matches of match ['match_id'='{match_id}']")
     return updated_match
@@ -279,15 +289,11 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     # Delete previously created matches
     next_matches = match['next_matches']
     if len(next_matches) > 0:
-        for message_id in next_matches:
-            # Delete message
-            message_to_delete: Message = await message.channel.fetch_message(message_id)
-            await message_to_delete.delete()
-            # Delete database document
+        for next_match_id in next_matches:
             try:
-                await mdb.delete_document(db, {'message_id': message_id}, MATCHES)
+                await delete_match(self, message, db, bracket, next_match_id)
             except:
-                print(f"Failed to delete match ['message_id'='{message_id}'] on override.'")
+                print(f"Something went wrong when deleting match ['match_id'={next_match_id}] while deleting bracket ['name'={bracket_name}].")
 
     # Report match
     # winner = match['player1'] if winner_emote == '1️⃣' else match['player2']

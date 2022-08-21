@@ -21,29 +21,6 @@ ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-b
 time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9] ([AaPp][Mm])$') # ex. 10:00 AM
 time_re_short = re.compile(r'([1-9]|0[1-9]|1[0-2]) ([AaPp][Mm])$')           # ex. 10 PM
 
-async def parse_args(self: Client, message: Message, db: Database, usage: str, argv: list, argc: int, f_argc: int = 2, send: bool = True):
-    """"
-    Parses arguments for bracket functions.
-    """
-    if argc < f_argc:
-        return await message.channel.send(usage)
-    # Get bracket from database
-    if argc >= f_argc + 1:
-        bracket_name = ' '.join(argv[2:]) # Get bracket name
-        # Check if bracket exists
-        bracket = await get_bracket(self, db, bracket_name)
-        if not bracket:
-            if send: await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
-            return (None, None)
-    elif argc < f_argc + 1:
-        # Get most recent bracket that has not yet been completed
-        bracket = await mdb.find_most_recent_document(db, {'completed': False}, BRACKETS)
-        if not bracket:
-            if send: await message.channel.send(f"There are currently no open brackets.")
-            return (None, None)
-        bracket_name = bracket['name']
-    return (bracket, bracket_name)
-
 async def get_bracket(self: Client, db: Database, bracket_name: str):
     """
     Retrieves and returns a bracket document from the database (if it exists).
@@ -143,16 +120,13 @@ async def delete_bracket(self: Client, message: Message, db: Database, argv: lis
         return await message.channel.send(f"Only the author can delete the bracket.")
     
     # Delete every match message and document associated with the bracket
-    for match in bracket['matches']:
-        match['match_id']
-        try:
-            await _match.delete_match(self, message, db, match)
-        except:
-            print(f"Failed to delete match ['match_id'={match['match_id']}] while deleting bracket ['name'={bracket_name}].")
+    await delete_all_matches(self, message, db, bracket)
+    # Delete bracket document
     try:
         result = await mdb.delete_document(db, {'name': bracket_name}, BRACKETS)
     except:
         print(f"Failed to delete bracket ['name'={bracket_name}].")
+    # Delete bracket message
     try:
         bracket_message: Message = await message.channel.fetch_message(bracket['message_id'])
         await bracket_message.delete() # delete message from channel
@@ -188,6 +162,10 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
     usage = 'Usage: `$bracket start [name]`'
     bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc)
     if not bracket: return
+    # Check if already started
+    if not bracket['open']:
+        await message.channel.send(f"'{bracket_name}' has already been started.")
+        return False
     # Make sure there are sufficient number of entrants
     if len(bracket['entrants']) < 2:
         return await message.channel.send(f"Bracket must have at least 2 entrants before starting.")
@@ -212,7 +190,7 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
         except:
             print(f"Failed to add match ['match_id'='{match['match']['id']}'] to bracket ['name'='{bracket_name}']")
     # Update embed message
-    await edit_bracket_message(self, updated_bracket, message.channel, status='Started 🟩')
+    await edit_bracket_message(self, updated_bracket, message.channel)
     return True
 
 async def finalize_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
@@ -248,7 +226,7 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
         print(f"Failed to update final bracket ['message_id'='{bracket['message_id']}'].")
         return False
     # Update embed message
-    await edit_bracket_message(self, updated_bracket, message.channel, status='Completed 🏁')
+    await edit_bracket_message(self, updated_bracket, message.channel)
     print(f"Finalized bracket '{bracket_name}' ['message_id'='{bracket['message_id']}'].")
     return True
 
@@ -258,14 +236,76 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
     """
     usage = 'Usage: `$bracket reset [name]`'
     bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False)
+    bracket_message_id = bracket['message_id']
+    challonge_id = bracket['challonge']['id']
     if not bracket: return
-    # TODO
+    if bracket['completed']: 
+        message.channel.send("Cannot reset a finalized bracket.")
+        return False
+    # Delete every match message and document associated with the bracket
+    await delete_all_matches(self, message, db, bracket)
+    # Reset bracket on challonge
+    try:
+        reset_bracket = challonge.tournaments.reset(challonge_id)
+    except Exception as e:
+        printlog(f"Something went wrong when resetting bracket ['name'='{bracket_name}'] on challonge.", e)
+    # Set open to true and reset number of rounds
+    updated_bracket = await mdb.update_single_document(db, {'message_id': bracket_message_id}, {'$set': {'open': True, 'num_rounds': None }}, BRACKETS)
+    # Reset bracket message
+    bracket_message = await message.channel.fetch_message(bracket_message_id)
+    new_bracket_embed = create_bracket_embed(bracket, bracket['entrants'])
+    await bracket_message.edit(embed=new_bracket_embed)
+    await message.channel.send(f"Successfully reset bracket '{bracket_name}'.")
+    return True
+    
+
+######################
+## HELPER FUNCTIONS ##
+######################
+
+async def parse_args(self: Client, message: Message, db: Database, usage: str, argv: list, argc: int, f_argc: int = 2, send: bool = True):
+    """"
+    Parses arguments for bracket functions.
+    """
+    if argc < f_argc:
+        return await message.channel.send(usage)
+    # Get bracket from database
+    if argc >= f_argc + 1:
+        bracket_name = ' '.join(argv[2:]) # Get bracket name
+        # Check if bracket exists
+        bracket = await get_bracket(self, db, bracket_name)
+        if not bracket:
+            if send: await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
+            return (None, None)
+    elif argc < f_argc + 1:
+        # Get most recent bracket that has not yet been completed
+        bracket = await mdb.find_most_recent_document(db, {'completed': False}, BRACKETS)
+        if not bracket:
+            if send: await message.channel.send(f"There are currently no open brackets.")
+            return (None, None)
+        bracket_name = bracket['name']
+    return (bracket, bracket_name)
+
+async def delete_all_matches(self: Client, message: Message, db: Database, bracket):
+    """
+    Deletes all matches in the specified bracket.
+    """
+    bracket_name = bracket['name']
+    retval = True
+    for match in bracket['matches']:
+        match_id = match['match_id']
+        try:
+            await _match.delete_match(self, message, db, bracket, match_id)
+        except:
+            print(f"Failed to delete match ['match_id'={match_id}] while deleting bracket ['name'={bracket_name}].")
+            retval = False
+    return retval
 
 #######################
 ## MESSAGE FUNCTIONS ##
 #######################
 
-def create_bracket_embed(bracket, entrants: list=[], status: str="Open for Registration  🚨"):
+def create_bracket_embed(bracket, entrants: list=[]):
     """
     Creates embed object to include in bracket message.
     """
@@ -273,6 +313,15 @@ def create_bracket_embed(bracket, entrants: list=[], status: str="Open for Regis
     bracket_name = bracket['name']
     challonge_url = bracket['challonge']['url']
     time = bracket['starttime']
+    
+    # Check the status
+    if bracket['completed']:
+        status = "Completed 🏁"
+    elif bracket['open']:
+        status = "🚨 Open for Registration 🚨"
+    else:
+        status = "Started 🟩"
+
     embed = Embed(title=f'🥊  {bracket_name}', description=f"Status:  {status}", color=0x6A0DAD)
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     time_str = time.strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
@@ -318,13 +367,13 @@ def create_results_embed(bracket, entrants: list):
     embed.set_footer(text=f'Completed: {time_str}')
     return embed
 
-async def edit_bracket_message(self: Client, bracket, channel: TextChannel, status='🚨  Open for Registration 🚨'):
+async def edit_bracket_message(self: Client, bracket, channel: TextChannel):
     """
     Edits bracket embed message in a channel.
     """
     message = await channel.fetch_message(bracket['message_id'])
-    embed = create_bracket_embed(bracket, entrants=bracket['entrants'], status=status)
-    if status == 'Completed 🏁':
+    embed = create_bracket_embed(bracket, entrants=bracket['entrants'])
+    if bracket['completed']:
         time_str = bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
         embed.set_footer(text=f'Completed: {time_str}')
         embed.set_author(name="Click Here to See Results", url=bracket['result_url'], icon_url=ICON)

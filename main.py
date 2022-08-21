@@ -108,13 +108,15 @@ class MyBot(discord.Client):
                     await bracket.start_bracket(self, message, db, argv, argc)
                 case "finalize":
                     await bracket.finalize_bracket(self, message, db, argv, argc)
+                case "reset":
+                    await bracket.reset_bracket(self, message, db, argv, argc)
                 case "override":
                     await match.override_match_score(self, message, db, argv, argc)
                 case "test":
                     await bracket.create_test_bracket(self, message, db, argv, argc)
                 case _:
                     # TODO: List options
-                    pass
+                    await message.channel.send("Command not recognized.")
 
         # Commands
         elif message.content.startswith('$cmd'): 
