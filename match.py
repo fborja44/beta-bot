@@ -46,7 +46,8 @@ async def add_match(self: Client, message: Message, db: Database, bracket, chall
         "player2": player2,
         "round": challonge_match['round'],
         'completed': False,
-        "winner": None
+        "winner": None,
+        "next_matches" : []
     }
 
     # Send embed message
@@ -90,57 +91,6 @@ async def delete_match(self: Client, message: Message, db: Database, match):
         return False
     # Delete from database
     return await mdb.delete_document(db, {"match_id": match_id}, MATCHES)
-
-async def report_match(self: Client, match_message: Message, db: Database, bracket, match, winner_emote: str):
-    """
-    Reports a match winner and fetches the next matches that have not yet been called.
-    """
-    bracket_name = bracket['name']
-    bracket_challonge_id = bracket['challonge']['id']
-    match_id = match['match_id']
-    if winner_emote == '1️⃣':
-        winner = match['player1']
-        score = '1-0'
-    elif winner_emote == '2️⃣':
-        winner = match['player2']
-        score = '0-1'
-    try:    
-        challonge.matches.update(bracket_challonge_id, match_id, scores_csv=score,winner_id=winner['challonge_id'])
-    except Exception as e:
-        printlog(f"Something went wrong when reporting match ['match_id'={match_id}] on challonge.", e)
-        return False
-    try:
-        await mdb.update_single_document(db, {'match_id': match_id}, { '$set': {'completed': datetime.now(), 'winner': winner}}, MATCHES)
-    except:
-        print(f"Failed to report match ['match_id'={match_id}] in database.")
-        return False
-
-    match_embed = match_message.embeds[0]
-    confirm_embed = edit_match_embed_confirmed(match_embed, winner)
-    await match_message.edit(embed=confirm_embed)
-    print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
-
-    # Check for matches that have not yet been called
-    try:
-        matches = challonge.matches.index(bracket['challonge']['id'], state='open')
-    except Exception as e:
-        printlog("Failed to get new matches.", e)
-        return False
-    # Check if last match
-    if len(matches) == 0 and match['round'] == bracket['num_rounds']:
-        await match_message.channel.send(f"***{bracket_name}*** has been completed! Use `$bracket finalize {bracket_name}` to finalize the results!")
-        return True
-    for new_match in matches:
-        # Check if match has already been called (in database)
-        try:
-            check_match = await mdb.find_document(db, {'match_id': new_match['id']}, MATCHES)
-        except:
-            print("Failed to check match in database..")
-            return False
-        if check_match:
-            continue
-        await add_match(self, match_message, db, bracket, new_match)
-    return True
 
 async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db: Database):
     """
@@ -226,6 +176,64 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
             dispute_embed = edit_match_embed_dispute(match_embed)
             await match_message.edit(embed=dispute_embed)
     return True
+
+async def report_match(self: Client, match_message: Message, db: Database, bracket, match, winner_emote: str):
+    """
+    Reports a match winner and fetches the next matches that have not yet been called.
+    """
+    bracket_name = bracket['name']
+    bracket_challonge_id = bracket['challonge']['id']
+    match_id = match['match_id']
+    if winner_emote == '1️⃣':
+        winner: dict = match['player1']
+        score = '1-0'
+    elif winner_emote == '2️⃣':
+        winner: dict = match['player2']
+        score = '0-1'
+    try:    
+        challonge.matches.update(bracket_challonge_id, match_id, scores_csv=score,winner_id=winner['challonge_id'])
+    except Exception as e:
+        printlog(f"Something went wrong when reporting match ['match_id'={match_id}] on challonge.", e)
+        return False
+    try:
+        winner.pop('vote', None)
+        winner['winner_emote'] = winner_emote
+        updated_match = await mdb.update_single_document(db, {'match_id': match_id}, { '$set': {'completed': datetime.now(), 'winner': winner}}, MATCHES)
+    except:
+        print(f"Failed to report match ['match_id'={match_id}] in database.")
+        return False
+
+    match_embed = match_message.embeds[0]
+    confirm_embed = edit_match_embed_confirmed(match_embed, winner)
+    await match_message.edit(embed=confirm_embed)
+    print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
+
+    # Check for matches that have not yet been called
+    try:
+        matches = challonge.matches.index(bracket['challonge']['id'], state='open')
+    except Exception as e:
+        printlog("Failed to get new matches.", e)
+        return False
+    # Check if last match
+    if len(matches) == 0 and match['round'] == bracket['num_rounds']:
+        await match_message.channel.send(f"***{bracket_name}*** has been completed! Use `$bracket finalize {bracket_name}` to finalize the results!")
+        return True
+    for challonge_match in matches:
+        # Check if match has already been called (in database)
+        try:
+            check_match = await mdb.find_document(db, {'match_id': challonge_match['id']}, MATCHES)
+        except:
+            print("Failed to check match in database..")
+            return False
+        if check_match:
+            continue
+        new_match = await add_match(self, match_message, db, bracket, challonge_match)
+        # Add new match message_id to old match's next_matches list
+        try:
+            await mdb.update_single_document(db, {'match_id': match_id}, {'$push': {'next_matches': new_match['message_id']}}, MATCHES)
+        except:
+            print(f"Failed to add new match ['match_id'='{new_match['match_id']}'] to next_matches of match ['match_id'='{match_id}']")
+    return updated_match
     
 async def override_match_score(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
@@ -253,7 +261,12 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     except:
         return
     if not match:
-        return await message.channel.send("Score override must be in reply to a match message.")
+        return await message.channel.send("Match override must be in reply to a match message.")
+
+    # Check if actually changing the winner
+    if match['winner'] is not None and winner_emote == match['winner']['winner_emote']:
+        await message.channel.send("Match override failed; Winner is the same.")
+        return False
 
     # Get bracket the match is in
     match_id = match['match_id']
@@ -263,10 +276,25 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
         printlog(f"Failed to get bracket ['name'={bracket_name}] for match ['id'={match_id}].")
         return False
 
-    winner = match['player1'] if winner_emote == '1️⃣' else match['player2']
+    # Delete previously created matches
+    next_matches = match['next_matches']
+    if len(next_matches) > 0:
+        for message_id in next_matches:
+            # Delete message
+            message_to_delete: Message = await message.channel.fetch_message(message_id)
+            await message_to_delete.delete()
+            # Delete database document
+            try:
+                await mdb.delete_document(db, {'message_id': message_id}, MATCHES)
+            except:
+                print(f"Failed to delete match ['message_id'='{message_id}'] on override.'")
+
     # Report match
-    await report_match(self, match_message, db, bracket, match, winner_emote)
+    # winner = match['player1'] if winner_emote == '1️⃣' else match['player2']
+    reported_match = await report_match(self, match_message, db, bracket, match, winner_emote)
+
     print("Match succesfully overwritten.")
+    await message.channel.send(f"Match override successful. New winner: {reported_match['winner']['name']} {winner_emote}")
     return True
 
 #######################
@@ -295,7 +323,7 @@ def edit_match_embed_dispute(embed: Embed):
     """
     Updates embed object for disputes.
     """
-    embed.add_field(name="🛑 Dispute Detected 🛑", value="Contact a bracket manager or change reaction to resolve.")
+    embed.add_field(name="🛑 Score Dispute 🛑", value="Contact a bracket manager or change vote to resolve.")
     embed.color = 0xD4180F
     return embed
 

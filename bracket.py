@@ -129,7 +129,6 @@ async def add_bracket(self: Client, message: Message, db: Database, argv: list, 
     except:
         print(f"User '{message.author.name}' [id={message.author.id}] created new bracket '{bracket_name}'.")
     return (new_bracket, bracket_message, bracket_challonge)
-    # TODO: Cleanup if anything fails (delete db entry, delete message, delete challonge bracket)
 
 async def delete_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
@@ -312,7 +311,7 @@ def create_results_embed(bracket, entrants: list):
             case 3:
                 results_content += f"> 🥉  {entrant['name']}\n"
             case _:
-                results_content += f"> **{entrant['final_rank']}.** * * {entrant['name']}"
+                results_content += f"> **{entrant['final_rank']}.** {entrant['name']}"
     embed.add_field(name=f'Placements', value=results_content, inline=False)
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
     time_str = bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
