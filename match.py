@@ -16,45 +16,6 @@ BRACKETS = 'brackets'
 MATCHES = 'matches'
 ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-bd10359b8556-profile_image-70x70.png'
 
-def create_match_embed(bracket, match):
-    """
-    Creates embed object to include in match message.
-    """
-    bracket_name = bracket['name']
-    match_id = match['match_id']
-    jump_url = bracket['jump_url']
-    round = match['round']
-    player1_id = match['player1']['discord_id']
-    player2_id = match['player2']['discord_id']
-    time = datetime.now().strftime("%#I:%M %p")
-    embed = Embed(title=get_round_name(bracket, match_id, round), description=f"Results Pending\nOpened at {time}", color=0x50C878)
-    embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
-    embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
-    # embed.add_field(name=f'Bracket Link', value=url, inline=False)
-    embed.set_footer(text="React with 1️⃣ or 2️⃣ to report the winner.")
-    return embed
-
-def edit_match_embed_dispute(embed: Embed):
-    """
-    Updates embed object for disputes.
-    """
-    embed.add_field(name="🛑 Dispute Detected 🛑", value="Contact a bracket manager or change reaction to resolve.")
-    embed.color = 0xD4180F
-    return embed
-
-def edit_match_embed_confirmed(embed: Embed, winner):
-    """
-    Updates embed object for confirmed match
-    """
-    time = datetime.now().strftime("%#I:%M %p")
-    embed.description = f"Winner: **{winner['name']}**\nFinished at {time}"
-    if len(embed.fields) > 1:
-        # Remove dispute field
-        embed.remove_field(1)
-    embed.set_footer(text="Result finalized. To change result, contact a bracket manager.")
-    embed.color = 0x000000
-    return embed
-
 async def get_match(self: Client, db: Database, match_id: int):
     """
     Retrieves and returns a match document from the database (if it exists).
@@ -134,6 +95,7 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
     """
     Reports a match winner and fetches the next matches that have not yet been called.
     """
+    bracket_name = bracket['name']
     bracket_challonge_id = bracket['challonge']['id']
     match_id = match['match_id']
     if winner_emote == '1️⃣':
@@ -145,8 +107,7 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
     try:    
         challonge.matches.update(bracket_challonge_id, match_id, scores_csv=score,winner_id=winner['challonge_id'])
     except Exception as e:
-        printlog(f"Something went wrong when reporting match ['match_id'={match_id}] on challonge.")
-        print(e)
+        printlog(f"Something went wrong when reporting match ['match_id'={match_id}] on challonge.", e)
         return False
     try:
         await mdb.update_single_document(db, {'match_id': match_id}, { '$set': {'completed': datetime.now(), 'winner': winner}}, MATCHES)
@@ -163,11 +124,23 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
     try:
         matches = challonge.matches.index(bracket['challonge']['id'], state='open')
     except Exception as e:
-        printlog("Failed to get new matches.")
-        print(e)
+        printlog("Failed to get new matches.", e)
         return False
-    for match in matches:
-       await add_match(self, match_message, db, bracket, match)
+    # Check if last match
+    if len(matches) == 0 and match['round'] == bracket['num_rounds']:
+        await match_message.channel.send(f"***{bracket_name}*** has been completed! Use `$bracket finalize {bracket_name}` to finalize the results!")
+        return True
+    for new_match in matches:
+        # Check if match has already been called (in database)
+        try:
+            check_match = await mdb.find_document(db, {'match_id': new_match['id']}, MATCHES)
+        except:
+            print("Failed to check match in database..")
+            return False
+        if check_match:
+            continue
+        await add_match(self, match_message, db, bracket, new_match)
+    return True
 
 async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db: Database):
     """
@@ -210,7 +183,7 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
         except:
             pass
     elif payload.event_type == 'REACTION_REMOVE':
-        if match['player1']['vote'] == payload.emoji.name: # Removed vote
+        if voter['vote'] == payload.emoji.name: # Removed vote
             vote = None
         else:
             return False # Switched vote
@@ -296,6 +269,49 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     print("Match succesfully overwritten.")
     return True
 
+#######################
+## MESSAGE FUNCTIONS ##
+#######################
+
+def create_match_embed(bracket, match):
+    """
+    Creates embed object to include in match message.
+    """
+    bracket_name = bracket['name']
+    match_id = match['match_id']
+    jump_url = bracket['jump_url']
+    round = match['round']
+    player1_id = match['player1']['discord_id']
+    player2_id = match['player2']['discord_id']
+    time = datetime.now().strftime("%#I:%M %p")
+    embed = Embed(title=get_round_name(bracket, match_id, round), description=f"Results Pending\nOpened at {time}", color=0x50C878)
+    embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
+    embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
+    # embed.add_field(name=f'Bracket Link', value=url, inline=False)
+    embed.set_footer(text="React with 1️⃣ or 2️⃣ to report the winner.")
+    return embed
+
+def edit_match_embed_dispute(embed: Embed):
+    """
+    Updates embed object for disputes.
+    """
+    embed.add_field(name="🛑 Dispute Detected 🛑", value="Contact a bracket manager or change reaction to resolve.")
+    embed.color = 0xD4180F
+    return embed
+
+def edit_match_embed_confirmed(embed: Embed, winner):
+    """
+    Updates embed object for confirmed match
+    """
+    time = datetime.now().strftime("%#I:%M %p")
+    embed.description = f"Winner: **{winner['name']}**\nFinished at {time}"
+    if len(embed.fields) > 1:
+        # Remove dispute field
+        embed.remove_field(1)
+    embed.set_footer(text="Result finalized. To change result, contact a bracket manager.")
+    embed.color = 0x000000
+    return embed
+
 def get_round_name(bracket, match_id, round):
     """
     Returns string value of round number based on number of rounds in a bracket.
@@ -332,4 +348,4 @@ def get_round_name(bracket, match_id, round):
             case 2:
                 return "Losers Quarterfinals"
             case _:
-                return f"Losers Round {round}"
+                return f"Losers Round {abs(round)}"
