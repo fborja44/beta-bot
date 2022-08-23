@@ -159,14 +159,15 @@ async def edit_cmd(self, message, db: Database, argv: list, argc: int):
     Edits the content of the specified command.
     """
     usage = 'Usage: `$cmd edit <name> <text>`'
-    cmd_content = ' '.join(argv[2:]) # get cmd message
+    cmd_content = ' '.join(argv[3:]) # get cmd message
 
     # Check num args
     if argc < 4:
         return await message.channel.send(usage)
 
-    cmd_name = argv[1]
+    cmd_name = argv[2]
     # Get command from database and update
+    # TODO: Does not work with special variables
     cmd = await mdb.update_single_document(db, {"name": cmd_name}, {'$set': {'content': cmd_content}}, COMMANDS)
     # Command does not exist
     if cmd:

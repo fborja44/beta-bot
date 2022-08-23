@@ -322,7 +322,7 @@ def create_match_embed(bracket, match):
     embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
     embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
     # embed.add_field(name=f'Bracket Link', value=url, inline=False)
-    embed.set_footer(text="React with 1️⃣ or 2️⃣ to report the winner.")
+    embed.set_footer(text="Players react with 1️⃣ or 2️⃣ to report the winner.")
     return embed
 
 def edit_match_embed_dispute(embed: Embed):
@@ -338,7 +338,7 @@ def edit_match_embed_confirmed(embed: Embed, winner):
     Updates embed object for confirmed match
     """
     time = datetime.now().strftime("%#I:%M %p")
-    embed.description = f"Winner: **{winner['name']}**\nFinished at {time}"
+    embed.description = f"⭐ Winner: **{winner['name']}**\nFinished at {time}"
     if len(embed.fields) > 1:
         # Remove dispute field
         embed.remove_field(1)

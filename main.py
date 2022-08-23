@@ -97,7 +97,7 @@ class MyBot(discord.Client):
             if argc == 1:
                 return await message.channel.send(usage)
             # Get option
-            match argv[1]:
+            match argv[1].lower():
                 case "create":
                     await bracket.add_bracket(self, message, db, argv, argc)
                 case "edit":
@@ -110,6 +110,8 @@ class MyBot(discord.Client):
                     await bracket.finalize_bracket(self, message, db, argv, argc)
                 case "reset":
                     await bracket.reset_bracket(self, message, db, argv, argc)
+                case "results":
+                    await bracket.send_results(self, message, db, argv, argc)
                 case "override":
                     await match.override_match_score(self, message, db, argv, argc)
                 case "test":
