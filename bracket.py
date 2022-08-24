@@ -1,6 +1,7 @@
 from cgi import print_exception
 from datetime import datetime, timedelta, date
 from discord import Client, Embed, Guild, Message, Member, RawReactionActionEvent, TextChannel
+from dotenv import load_dotenv
 from gridfs import Database
 from logger import printlog, printlog_msg
 from pprint import pprint
@@ -8,15 +9,23 @@ from traceback import print_exception
 import challonge
 import match as _match
 import mdb
+import os
 import re
+import requests
+
+os.environ['path'] += os.getenv('CAIRO_PATH')
+from cairosvg import svg2png # SVG to PNG
 
 # bracket.py
 # User created brackets
 
-# Challonge API: https://api.challonge.com/v1
+load_dotenv()
 
 BRACKETS = 'brackets'
 ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-bd10359b8556-profile_image-70x70.png'
+IMGUR_CLIENT_ID = os.getenv('IMGUR_ID')
+IMGUR_URL = 'https://api.imgur.com/3'
+os.environ['path'] += r';C:\Program Files\UniConvertor-2.0rc5\dlls'
 
 time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9] ([AaPp][Mm])$') # ex. 10:00 AM
 time_re_short = re.compile(r'([1-9]|0[1-9]|1[0-2]) ([AaPp][Mm])$')           # ex. 10 PM
@@ -309,7 +318,7 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
     updated_bracket = await mdb.update_single_document(db, {'message_id': bracket_message_id}, {'$set': {'open': True, 'num_rounds': None }}, BRACKETS)
     # Reset bracket message
     bracket_message = await message.channel.fetch_message(bracket_message_id)
-    new_bracket_embed = create_bracket_embed(bracket, bracket['entrants'])
+    new_bracket_embed = create_bracket_embed(bracket)
     await bracket_message.edit(embed=new_bracket_embed)
     await message.channel.send(f"Successfully reset bracket '{bracket_name}'.")
     return True
@@ -364,7 +373,74 @@ async def delete_all_matches(self: Client, message: Message, db: Database, brack
 ## MESSAGE FUNCTIONS ##
 #######################
 
-def create_bracket_embed(bracket, entrants: list=[]):
+async def edit_bracket_message(self: Client, bracket, channel: TextChannel):
+    """
+    Edits bracket embed message in a channel.
+    """
+    bracket_name = bracket['name']
+    bracket_message: Message = await channel.fetch_message(bracket['message_id'])
+    embed = bracket_message.embeds[0]
+    embed = update_embed_entrants(bracket, embed)
+    if not bracket['open']:
+        try:
+            embed = create_bracket_image(bracket, embed)
+        except Exception as e:
+            printlog(f"Failed to create image for bracket ['name'='{bracket_name}'].", e)
+        if not embed:
+            printlog(f"Error when creating image for bracket ['name'='{bracket_name}'].", e)
+    if bracket['completed']:
+        time_str = bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
+        embed.set_footer(text=f'Completed: {time_str}')
+        embed.set_author(name="Click Here to See Results", url=bracket['result_url'], icon_url=ICON)
+    await bracket_message.edit(embed=embed)
+
+def update_embed_entrants(bracket, embed: Embed):
+    """
+    Updates the entrants list in a bracket embed.
+    """
+    entrants = bracket['entrants']
+    if len(entrants) > 0:
+        entrants_content = ""
+        for entrant in entrants:
+            # To mention a user:
+            # <@{user_id}>
+            entrants_content += f"> <@{entrant['discord_id']}>\n"
+    else:
+        entrants_content = '> *None*'
+    embed.set_field_at(1, name=f'Entrants ({len(entrants)})', value=entrants_content, inline=False)
+    return embed
+
+def create_bracket_image(bracket, embed: Embed):
+    """
+    Creates an image of the bracket.
+    Converts the generated svg challonge image to png and uploads it to imgur.
+    Discord does not support svg images in preview.
+    """
+    bracket_name = bracket['name']
+    challonge_url = bracket['challonge']['url']
+    if len(bracket['entrants']) >= 2:
+        svg_url = f"{challonge_url}.svg"
+        png_data = svg2png(url=svg_url) # Convert svg to png
+        payload = {
+            'image': png_data
+        }
+        headers = {
+            'Authorization': f'Client-ID {IMGUR_CLIENT_ID}'
+        }
+        response = requests.request("POST", f"{IMGUR_URL}/image", headers=headers, data=payload, files=[])
+        if response.status_code == requests.codes.ok:
+            data = response.json()['data']
+            image_link = data['link']
+            embed.set_image(url=image_link)
+            return embed
+        else:
+            printlog(f"Failed to create image for bracket ['name'='{bracket_name}'].")
+            return False
+    else:
+        printlog(f"Failed to create image for bracket ['name'='{bracket_name}'].")
+        return False
+
+def create_bracket_embed(bracket):
     """
     Creates embed object to include in bracket message.
     """
@@ -385,15 +461,9 @@ def create_bracket_embed(bracket, entrants: list=[]):
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     time_str = time.strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
     embed.add_field(name='Starting At', value=time_str, inline=False)
-    if len(entrants) > 0:
-        entrants_content = ""
-        for entrant in entrants:
-            # To mention a user:
-            # <@{user_id}>
-            entrants_content += f"> <@{entrant['discord_id']}>\n"
-    else:
-        entrants_content = '> *None*'
-    embed.add_field(name=f'Entrants ({len(entrants)})', value=entrants_content, inline=False)
+    # Entrants list
+    embed.add_field(name='Entrants (0)', value="> *None*", inline=False)
+    embed = update_embed_entrants(bracket, embed)
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
     embed.set_footer(text=f'React with ✅ to enter! | Created by {author_name}')
     return embed
@@ -425,18 +495,6 @@ def create_results_embed(bracket, entrants: list):
     time_str = bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
     embed.set_footer(text=f'Completed: {time_str}')
     return embed
-
-async def edit_bracket_message(self: Client, bracket, channel: TextChannel):
-    """
-    Edits bracket embed message in a channel.
-    """
-    message = await channel.fetch_message(bracket['message_id'])
-    embed = create_bracket_embed(bracket, entrants=bracket['entrants'])
-    if bracket['completed']:
-        time_str = bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
-        embed.set_footer(text=f'Completed: {time_str}')
-        embed.set_author(name="Click Here to See Results", url=bracket['result_url'], icon_url=ICON)
-    await message.edit(embed=embed)
 
 #######################
 ## ENTRANT FUNCTIONS ##

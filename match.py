@@ -200,11 +200,13 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
     elif winner_emote == '2️⃣':
         winner: dict = match['player2']
         score = '0-1'
+    # Update on challonge
     try:    
         challonge.matches.update(bracket_challonge_id, match_id, scores_csv=score,winner_id=winner['challonge_id'])
     except Exception as e:
         printlog(f"Something went wrong when reporting match ['match_id'={match_id}] on challonge.", e)
         return False
+    # Update status in db
     try:
         winner.pop('vote', None)
         winner['winner_emote'] = winner_emote
@@ -213,6 +215,7 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
         print(f"Failed to report match ['match_id'={match_id}] in database.")
         return False
 
+    # Update match embed
     match_embed = match_message.embeds[0]
     confirm_embed = edit_match_embed_confirmed(match_embed, winner)
     await match_message.edit(embed=confirm_embed)
@@ -243,6 +246,15 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
             await mdb.update_single_document(db, {'match_id': match_id}, {'$push': {'next_matches': new_match['match_id']}}, MATCHES)
         except:
             print(f"Failed to add new match ['match_id'='{new_match['match_id']}'] to next_matches of match ['match_id'='{match_id}']")
+    
+    # Update bracket embed
+    try:
+        bracket_message: Message = await match_message.channel.fetch_message(bracket['message_id'])
+        updated_bracket_embed = _bracket.create_bracket_image(bracket, bracket_message.embeds[0])
+        await bracket_message.edit(embed=updated_bracket_embed)
+    except Exception as e:
+        printlog(f"Failed to create image for bracket ['name'='{bracket_name}'].", e)
+    
     return updated_match
     
 async def override_match_score(self: Client, message: Message, db: Database, argv: list, argc: int):
