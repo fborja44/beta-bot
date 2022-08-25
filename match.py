@@ -262,7 +262,7 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     Overrides the results of a match. The status of the match does not matter.
     Only usable by bracket creator or bracket manager
     """
-    usage = "Usage: `$bracket override <1️⃣ | 2️⃣>`. Must be in a reply to a match."
+    usage = "Usage: `$bracket override <name | 1️⃣ | 2️⃣>`. Must be in a reply to a match."
     if argc < 3 or not message.reference:
         await message.channel.send(usage)
         return False
@@ -270,13 +270,14 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     # Check if valid winner was provided
     valid1 = ['1', '1️⃣']
     valid2 = ['2', '2️⃣']
+    winner_emote = None
     if argv[2] in valid1:
         winner_emote = '1️⃣'
     elif argv[2] in valid2:
         winner_emote = '2️⃣'
     else:
-        await message.channel.send(usage) 
-        return False
+        # Get provided name
+        entrant_name = ' '.join(argv[2:])
 
     # Check if replying to a match message
     match_message = await message.channel.fetch_message(message.reference.message_id)
@@ -287,6 +288,18 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     if not match:
         await message.channel.send("Match override must be in reply to a match message.")
         return False
+    match_id = match['match_id']
+
+    # Check if entrant exists
+    if not winner_emote:
+        if match['player1']['name'].lower() == entrant_name.lower():
+            winner_emote = '1️⃣'
+        elif match['player2']['name'].lower() == entrant_name.lower():
+            winner_emote = '2️⃣'
+        else:
+            # printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['match_id'='{match_id}'].")
+            await message.channel.send(f"There is no entrant named '{entrant_name}' in this match.")
+            return False
 
     # Check if actually changing the winner
     if match['winner'] is not None and winner_emote == match['winner']['winner_emote']:
@@ -294,7 +307,6 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
         return False
 
     # Fetch bracket the match is in
-    match_id = match['match_id']
     bracket_name = match['bracket']['name']
     bracket = await _bracket.get_bracket(self, db, bracket_name)
     if not bracket:
@@ -333,7 +345,7 @@ async def disqualify_entrant_match(self: Client, message: Message, db: Database,
         entrant = match['player2']
         entrant_name = entrant['name']
     else:
-        printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['match_id'='{match_id}'].")
+        # printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['match_id'='{match_id}'].")
         await message.channel.send(f"There is no entrant named '{entrant_name}' in this match.")
         return False
 
