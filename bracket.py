@@ -22,6 +22,7 @@ from cairosvg import svg2png # SVG to PNG
 load_dotenv()
 
 BRACKETS = 'brackets'
+MATCHES = 'matches'
 ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-bd10359b8556-profile_image-70x70.png'
 IMGUR_CLIENT_ID = os.getenv('IMGUR_ID')
 IMGUR_URL = 'https://api.imgur.com/3'
@@ -159,10 +160,8 @@ async def delete_bracket(self: Client, message: Message, db: Database, argv: lis
 async def update_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
     Updates the specified bracket in the database (if it exists).
-
     TODO
     """
-
     usage = 'Usage: `$bracket update [name]`'
     bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False)
     if not bracket: 
@@ -509,13 +508,15 @@ async def update_bracket_entrants(self: Client, payload: RawReactionActionEvent,
     guild = self.get_guild(payload.guild_id)
     channel = await guild.get_channel(payload.channel_id)
     if not bracket or not bracket['open']:
-        return # Do not respond
+        # Do not respond
+        return False 
     if payload.event_type=='REACTION_ADD':
         await add_entrant(self, db, bracket, payload.member, channel)
     elif payload.event_type=='REACTION_REMOVE':
         guild: Guild = await self.get_guild(payload.guild_id)
         member = await guild.get_member(payload.user_id)
         await remove_entrant(self, db, bracket, member, channel)
+    return True
 
 async def add_entrant(self: Client, db: Database, bracket, member: Member, channel: TextChannel):
     """
@@ -535,7 +536,13 @@ async def add_entrant(self: Client, db: Database, bracket, member: Member, chann
         printlog(f"User ['name'='{member.name}']' is already registered as an entrant in bracket ['name'='{bracket_name}'].")
         return False
     # Add user to entrants list
-    entrant = {'name': member.name, 'discord_id': member.id, 'challonge_id': response['id']}
+    entrant = {
+        'name': member.name, 
+        'discord_id': member.id, 
+        'challonge_id': response['id'],
+        'placement': None,
+        'active': True
+        }
     try:
         updated_bracket = await mdb.update_single_document(db, {'name': bracket_name}, {'$push': {'entrants': entrant}}, BRACKETS)
     except:
@@ -582,14 +589,99 @@ async def remove_entrant(self: Client, db: Database, bracket, member: Member, ch
     else:
         print(f"Failed to remove entrant [id='{member.id}'] from bracket [id='{message_id}'].")
 
-async def disqualify_entrant(self: Client, message: Message, db: Database, argv: list, argc: int):
+async def disqualify_entrant_main(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
-    Destroys an entrant from a tournament or DQs them if the tournament has already started.
+    Destroys an entrant from a tournament or DQs them if the tournament has already started from a command.
+    Main function.
     """
-    usage = 'Usage: `$bracket dq [bracket name] [entrant name]`'
-    bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc)
-    
-    # 
+    usage = 'Usage: `$bracket dq <entrant name>`. Must be in a reply to a bracket or match.'
+    if argc < 3 or not message.reference:
+        await message.channel.send(usage)
+        return False
+    entrant_name = ' '.join(argv[2:])
+
+    reply_message = await message.channel.fetch_message(message.reference.message_id)
+    # Check if replying to a bracket message
+    try:
+        bracket = await mdb.find_document(db, {'message_id': reply_message.id}, BRACKETS)
+    except:
+        return False
+    if bracket:
+        return await disqualify_entrant_bracket(self, message, db, bracket, entrant_name)
+
+    # Check if replying to match message
+    try:
+        match = await mdb.find_document(db, {'message_id': reply_message.id}, MATCHES)
+    except:
+        return False
+    if match:
+        return await _match.disqualify_entrant_match(self, message, db, match, entrant_name)
+    await message.channel.send("DQ must be in reply to a bracket or match message.")
+    return False
+
+async def disqualify_entrant_bracket(self: Client, message: Message, db: Database, bracket, entrant_name: str):
+    """
+    Destroys an entrant from a tournament or DQs them if the tournament has already started from a command.
+    Bracket version.
+    """
+    bracket_name = bracket['name']
+    # Check if entrant exists
+    entrant = None
+    for elem in bracket['entrants']:
+        if elem['name'].lower() == entrant_name.lower():
+            entrant = elem
+    if not entrant:
+        printlog(f"User ['name'='{entrant_name}']' is not an entrant in bracket ['name'='{bracket_name}'].")
+        await message.channel.send(f"There is no entrant named '{entrant_name}' in ***{bracket_name}***.")
+        return False
+    elif not entrant['active']:
+        await message.channel.send(f"Entrant '{entrant_name}' has already been disqualified from ***{bracket_name}***.")
+        return False
+
+    # Call dq helper function
+    return await disqualify_entrant(self, message, db, bracket, entrant)
+
+async def disqualify_entrant(self: Client, message: Message, db: Database, bracket, entrant):
+    """
+    Function to dq an entrant in the database and challonge.
+    """
+    bracket_name = bracket['name']
+    challonge_id = bracket['challonge']['id']
+    entrant_name = entrant['name']
+    entrant['active'] = False
+    # Update entrant in database
+    try:
+        await mdb.update_single_document(db, {'name': bracket_name, "entrants.name": entrant['name']}, {'$set': {'active': True}}, BRACKETS)
+    except:
+        print("Failed to DQ entrant in database.")
+        return False
+    # Disqualify entrant on challonge
+    try:
+        challonge.participants.destroy(challonge_id, entrant['challonge_id'])
+    except Exception as e:
+        printlog(f"Failed to DQ entrant ['name'='{entrant_name}'] from bracket ['name'='{bracket_name}']", e)
+        return False
+
+    # Update all open matches
+    winner_emote = None
+    for bracket_match in bracket['matches']:
+        # Get match document
+        match = await _match.get_match(self, db, bracket_match['match_id'])
+        # Check if match is open
+        if match['completed']:
+            continue
+        # Check the players; Other player wins
+        if entrant_name == match['player1']['name']:
+            winner_emote = '2️⃣'
+            break
+        elif entrant_name == match['player2']['name']:
+            winner_emote = '1️⃣'
+            break
+    if winner_emote:
+        # Report match
+        match_message = await message.channel.fetch_message(match['message_id'])
+        await _match.report_match(self, match_message, db, bracket, match, winner_emote, is_dq=True)
+    return True
 
 #######################
 ## TESTING FUNCTIONS ##

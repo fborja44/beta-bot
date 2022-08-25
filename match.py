@@ -187,7 +187,7 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
             await match_message.edit(embed=dispute_embed)
     return True
 
-async def report_match(self: Client, match_message: Message, db: Database, bracket, match, winner_emote: str):
+async def report_match(self: Client, match_message: Message, db: Database, bracket, match, winner_emote: str, is_dq: bool=False):
     """
     Reports a match winner and fetches the next matches that have not yet been called.
     """
@@ -195,7 +195,7 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
     bracket_challonge_id = bracket['challonge']['id']
     match_id = match['match_id']
     if winner_emote == '1️⃣':
-        winner: dict = match['player1']
+        winner: dict = match['player1'] # TODO: check if this is needed
         score = '1-0'
     elif winner_emote == '2️⃣':
         winner: dict = match['player2']
@@ -217,7 +217,7 @@ async def report_match(self: Client, match_message: Message, db: Database, brack
 
     # Update match embed
     match_embed = match_message.embeds[0]
-    confirm_embed = edit_match_embed_confirmed(match_embed, winner)
+    confirm_embed = edit_match_embed_confirmed(match_embed, match['player1'], match['player2'], winner_emote, is_dq)
     await match_message.edit(embed=confirm_embed)
     print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
 
@@ -262,11 +262,12 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     Overrides the results of a match. The status of the match does not matter.
     Only usable by bracket creator or bracket manager
     """
-    usage = "Usage: `$bracket override <1️⃣ | 2️⃣>`. Must be in a reply to a match"
+    usage = "Usage: `$bracket override <1️⃣ | 2️⃣>`. Must be in a reply to a match."
     if argc < 3 or not message.reference:
-        return await message.channel.send(usage)
+        await message.channel.send(usage)
+        return False
 
-    # Make sure valid winner was provided
+    # Check if valid winner was provided
     valid1 = ['1', '1️⃣']
     valid2 = ['2', '2️⃣']
     if argv[2] in valid1:
@@ -274,23 +275,25 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     elif argv[2] in valid2:
         winner_emote = '2️⃣'
     else:
-        return await message.channel.send(usage) 
+        await message.channel.send(usage) 
+        return False
 
-    # Make sure replying to a match message
+    # Check if replying to a match message
     match_message = await message.channel.fetch_message(message.reference.message_id)
     try:
         match = await mdb.find_document(db, {'message_id': match_message.id}, MATCHES)
     except:
-        return
+        return False
     if not match:
-        return await message.channel.send("Match override must be in reply to a match message.")
+        await message.channel.send("Match override must be in reply to a match message.")
+        return False
 
     # Check if actually changing the winner
     if match['winner'] is not None and winner_emote == match['winner']['winner_emote']:
         await message.channel.send("Match override failed; Winner is the same.")
         return False
 
-    # Get bracket the match is in
+    # Fetch bracket the match is in
     match_id = match['match_id']
     bracket_name = match['bracket']['name']
     bracket = await _bracket.get_bracket(self, db, bracket_name)
@@ -314,6 +317,42 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     print("Match succesfully overwritten.")
     await message.channel.send(f"Match override successful. New winner: {reported_match['winner']['name']} {winner_emote}")
     return True
+
+async def disqualify_entrant_match(self: Client, message: Message, db: Database, match, entrant_name: str):
+    """
+    Destroys an entrant from a tournament or DQs them if the tournament has already started from a command.
+    Match version.
+    """
+    match_id = match['match_id']
+    # Check if entrant exists
+    entrant = None
+    if match['player1']['name'].lower() == entrant_name.lower():
+        entrant = match['player1']
+        entrant_name = entrant['name']
+    elif match['player2']['name'].lower() == entrant_name.lower():
+        entrant = match['player2']
+        entrant_name = entrant['name']
+    else:
+        printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['match_id'='{match_id}'].")
+        await message.channel.send(f"There is no entrant named '{entrant_name}' in this match.")
+        return False
+
+    # Fetch bracket the match is in
+    bracket_name = match['bracket']['name']
+    bracket = await _bracket.get_bracket(self, db, bracket_name)
+    if not bracket:
+        printlog(f"Failed to get bracket ['name'={bracket_name}] for match ['id'={match_id}].")
+        return False
+
+    # Check if already disqualified
+    bracket_entrant = list(filter(lambda elem: elem['name'] == entrant_name, bracket['entrants']))[0]
+    if not bracket_entrant['active']:
+        await message.channel.send(f"Entrant '{entrant_name}' has already been disqualified from ***{bracket_name}***.")
+        return False
+
+    # Call dq helper function
+    return await _bracket.disqualify_entrant(self, message, db, bracket, entrant)
+
 
 #######################
 ## MESSAGE FUNCTIONS ##
@@ -345,12 +384,23 @@ def edit_match_embed_dispute(embed: Embed):
     embed.color = 0xD4180F
     return embed
 
-def edit_match_embed_confirmed(embed: Embed, winner):
+def edit_match_embed_confirmed(embed: Embed, player1: dict, player2: dict, winner_emote: str, is_dq: bool=False):
     """
     Updates embed object for confirmed match
     """
     time = datetime.now().strftime("%#I:%M %p")
-    embed.description = f"⭐ Winner: **{winner['name']}**\nFinished at {time}"
+    player1_id = player1['discord_id']
+    player2_id = player2['discord_id']
+    if winner_emote == '1️⃣':
+        winner = player1
+        player1_emote = '⭐'
+        player2_emote = '❌' if not is_dq else '🇩🇶'
+    else:
+        winner = player2
+        player2_emote = '⭐'
+        player1_emote = '❌' if not is_dq else '🇩🇶'
+    embed.description = f"Winner: **{winner['name']}**\nFinished at {time}"
+    embed.set_field_at(index=0, name=f"Players", value=f'{player1_emote} <@{player1_id}> vs <@{player2_id}> {player2_emote}', inline=False)
     if len(embed.fields) > 1:
         # Remove dispute field
         embed.remove_field(1)

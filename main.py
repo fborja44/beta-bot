@@ -114,6 +114,8 @@ class MyBot(discord.Client):
                     await bracket.send_results(self, message, db, argv, argc)
                 case "override":
                     await match.override_match_score(self, message, db, argv, argc)
+                case "dq":
+                    await bracket.disqualify_entrant_main(self, message, db, argv, argc)
                 case "test":
                     await bracket.create_test_bracket(self, message, db, argv, argc)
                 case _:
