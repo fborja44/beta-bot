@@ -1,4 +1,4 @@
-from discord import Message
+from discord import Guild, Message
 from colorama import Fore, Back, Style
 from dotenv import load_dotenv
 from pprint import pprint
@@ -9,6 +9,7 @@ import command
 import challonge
 import discord
 import favorite
+import guild as _guild
 import logging
 import match
 import os
@@ -49,15 +50,24 @@ class MyBot(discord.Client):
         super().__init__(*args, **kwargs)
 
     async def on_ready(self): # Event called when bot is ready
-        print(Fore.YELLOW + f'{bot_client.user} is now ready.' + Style.RESET_ALL)
+        # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
+        # for guild in self.guilds:
+        #     await _guild.find_update_add_guild(self, db, guild)
+        print(Fore.YELLOW + f'---\n{bot_client.user} is now ready.' + Style.RESET_ALL)
+
+    async def on_guild_join(self, guild: Guild):
+        await _guild.find_update_add_guild(self, db, guild)
+
+    async def on_guild_remove(self, guild: Guild):
+        await _guild.delete_guild(self, db, guild)
 
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
         # Check if reacting to self 
         if payload.user_id == self.user.id:
             return
-        if payload.emoji.name == '⭐':
-            # Update favorites
-            await favorite.update_favorite(self, payload, db)
+        # if payload.emoji.name == '⭐':
+        #     # Update favorites
+        #     await favorite.update_favorite(self, payload, db)
         elif payload.emoji.name == '✅':
             # Update bracket entrants
             await bracket.update_bracket_entrants(self, payload, db)
@@ -69,9 +79,9 @@ class MyBot(discord.Client):
         # Check if reacting to self 
         if payload.user_id == self.user.id:
             return
-        if payload.emoji.name == '⭐':
-            # Update favorites
-            await favorite.update_favorite(self, payload, db)
+        # if payload.emoji.name == '⭐':
+        #     # Update favorites
+        #     await favorite.update_favorite(self, payload, db)
         elif payload.emoji.name == '✅':
             # Update bracket entrants
             await bracket.update_bracket_entrants(self, payload, db)

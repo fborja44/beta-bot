@@ -41,7 +41,8 @@ async def add_match(self: Client, message: Message, db: Database, bracket, chall
         "bracket": {
             'name': bracket['name'], 
             'message_id': bracket['message_id'], 
-            'challonge_id': bracket['challonge']['id'] },
+            'challonge_id': bracket['challonge']['id'] 
+            },
         "player1": player1,
         "player2": player2,
         "round": challonge_match['round'],
