@@ -548,8 +548,9 @@ async def add_entrant(self: Client, db: Database, bracket, member: Member, chann
     Adds an entrant to a bracket.
     """
     bracket_name = bracket['name']
-    bracket_entrants = [] # list of entrant names
-    map(lambda entrant: bracket_entrants.append(entrant['name']), bracket['entrants'])
+    entrant_names = [] # list of entrant names
+    for entrant in bracket['entrants']:
+        entrant_names.append(entrant['discord_id'])
     challonge_id = bracket['challonge']['id']
     # Add user to challonge bracket
     try:
@@ -558,7 +559,7 @@ async def add_entrant(self: Client, db: Database, bracket, member: Member, chann
         printlog(f"Failed to add user ['name'='{member.name}'] to challonge bracket. User may already exist.", e)
         return False
     # Check if already in entrants list
-    if member.name in bracket_entrants:
+    if member.name in entrant_names:
         printlog(f"User ['name'='{member.name}']' is already registered as an entrant in bracket ['name'='{bracket_name}'].")
         return False
     # Add user to entrants list
@@ -594,16 +595,16 @@ async def remove_entrant(self: Client, db: Database, bracket, user_id: int, chan
     """
     # Remove user from challonge bracket
     bracket_name = bracket['name']
-    bracket_entrants = [] # list of entrant names
-    map(lambda entrant: bracket_entrants.append(entrant['discord_id']), bracket['entrants'])
+    entrant_names = [] # list of entrant names
+    for entrant in bracket['entrants']:
+        entrant_names.append(entrant['discord_id'])
     challonge_id = bracket['challonge']['id']
     bracket_id = bracket['id']
-    print(bracket_entrants)
     # Check if already in entrants list
-    if user_id not in bracket_entrants:
+    if user_id not in entrant_names:
         printlog(f"User ['discord_id'='{user_id}']' is not registered as an entrant in bracket ['name'='{bracket_name}'].")
         return False
-    entrant = list(map(lambda entrant: entrant['discord_id'] == user_id))[0]
+    entrant = list(filter(lambda entrant: entrant['discord_id'] == user_id, bracket['entrants']))[0]
     try:
         response = challonge.participants.destroy(challonge_id, entrant['challonge_id'])
     except Exception as e:
