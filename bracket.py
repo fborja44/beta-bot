@@ -510,6 +510,15 @@ async def delete_all_matches(self: Client, message: Message, db: Database, db_br
 ## ENTRANT FUNCTIONS ##
 #######################
 
+def find_entrant(db_bracket: dict, entrant_id):
+    """
+    Returns an entrant in a bracket by id.
+    """
+    result = [entrant for entrant in db_bracket['entrants'] if entrant['id'] == entrant_id]
+    if result:
+        return result[0]
+    return None
+
 async def update_bracket_entrants(self: Client, payload: RawReactionActionEvent, db: Database):
     """
     Adds or removes an entrant from a bracket based on whether the reaction was added or removed.
@@ -848,7 +857,7 @@ async def create_test_bracket(self: Client, message: Message, db: Database, argv
     bracket_name = "Test Bracket"
     bracket_db , bracket_message , bracket_challonge = None, None, None
     guild: Guild = message.guild
-    db_guild = await _guild.find_guild(self, db, guild.id)
+    db_guild = await _guild.find_add_guild(self, db, guild)
     # Only allow guild admins to create a test bracket
     if not message.author.guild_permissions.administrator:
         return await message.channel.send(f"Only admins can create a test bracket.")

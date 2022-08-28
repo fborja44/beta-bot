@@ -50,14 +50,12 @@ async def add_match(self: Client, message: Message, db: Database, guild: Guild, 
     player2= list(filter(lambda entrant: (entrant['challonge_id'] == challonge_match['player2_id']), db_bracket['entrants']))[0]
     player1_id = player1['id']
     player2_id = player2['id']
-    player1['vote'] = None
-    player2['vote'] = None
 
     new_match = {
         "id": None,
         "challonge_id": challonge_match['id'],
-        "player1": player1,
-        "player2": player2,
+        "player1": {'id': player1['id'], 'vote': None},
+        "player2": {'id': player2['id'], 'vote': None},
         "round": challonge_match['round'],
         'completed': False,
         "winner_emote": None,
@@ -200,10 +198,10 @@ async def report_match(self: Client, match_message: Message, db: Database, db_gu
     match_challonge_id = db_match['challonge_id']
     match_id = db_match['id']
     if winner_emote == '1️⃣':
-        winner: dict = db_match['player1'] # TODO: check if this is needed
+        winner: dict = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
         score = '1-0'
     elif winner_emote == '2️⃣':
-        winner: dict = db_match['player2']
+        winner: dict = _bracket.find_entrant(db_bracket, db_match['player2']['id'])
         score = '0-1'
     # Update on challonge
     try:    
@@ -221,7 +219,9 @@ async def report_match(self: Client, match_message: Message, db: Database, db_gu
 
     # Update match embed
     match_embed = match_message.embeds[0]
-    confirm_embed = edit_match_embed_confirmed(match_embed, db_match['player1'], db_match['player2'], winner_emote, is_dq)
+    entrant1 = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
+    entrant2 = _bracket.find_entrant(db_bracket, db_match['player2']['id'])
+    confirm_embed = edit_match_embed_confirmed(match_embed, entrant1, entrant2, winner_emote, is_dq)
     await match_message.edit(embed=confirm_embed)
     print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
 
@@ -372,12 +372,9 @@ async def update_player(db: Database, guild_id: int, db_bracket: dict,
     """
     Updates the players in a match.
     """
-    print(updated_player1)
-    print(updated_player2)
     bracket_name = db_bracket['name']
     match_index = _bracket.find_index_in_bracket(db_bracket, MATCHES, 'id', match_id)
     if updated_player1:
-        print("test: ", db_bracket['matches'][match_index]['player1'])
         db_bracket['matches'][match_index]['player1'] = updated_player1
     if updated_player2:
         db_bracket['matches'][match_index]['player2'] = updated_player2
