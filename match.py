@@ -272,7 +272,7 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     """
     guild = message.channel.guild
     db_guild = await _guild.find_guild(self, db, guild.id)
-    usage = "Usage: `$bracket override <name | 1️⃣ | 2️⃣>`. Must be in a reply to a match."
+    usage = "Usage: `$bracket override <entrant_name | 1️⃣ | 2️⃣>`. Must be in a reply to a match."
     if argc < 3 or not message.reference:
         await message.channel.send(usage)
         return False

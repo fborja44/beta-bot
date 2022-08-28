@@ -61,14 +61,14 @@ def find_active_bracket(db_guild):
     except:
         return None
 
-def find_most_recent_bracket(db_guild):
+def find_most_recent_bracket(db_guild: dict, completed: bool):
     """
     Returns the most recently created bracket in a guild that has not yet been completed
     """
     guild_brackets = db_guild['brackets']
     guild_brackets.sort(key=lambda bracket: bracket['created_at'], reverse=True)
     try:
-        return list(filter(lambda bracket: not bracket['completed'], guild_brackets))[0]
+        return list(filter(lambda bracket: bracket['completed'] == completed, guild_brackets))[0]
     except:
         return None
 
@@ -414,7 +414,7 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
 ######################
 
 async def parse_args(self: Client, message: Message, db: Database, usage: str, argv: list, argc: int, f_argc: int=2, 
-                     send: bool=True, completed: bool=False, active=False):
+                     send: bool=True, completed: bool=False, active: bool=False):
     """"
     Parses arguments for bracket functions. Checks if there is a valid bracket.
     """
@@ -440,7 +440,7 @@ async def parse_args(self: Client, message: Message, db: Database, usage: str, a
                     await message.channel.send(f"There are currently no active brackets.")
                 return (None, None)
         else: # Get most recently created bracket
-            db_bracket = find_most_recent_bracket(db_guild)
+            db_bracket = find_most_recent_bracket(db_guild, completed)
             if not db_bracket:
                 if send: 
                     await message.channel.send(f"There are currently no open brackets.")
