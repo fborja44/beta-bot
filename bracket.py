@@ -448,7 +448,7 @@ async def parse_args(self: Client, message: Message, db: Database, usage: str, a
         bracket_name = db_bracket['name']
     return (db_bracket, bracket_name)
 
-def get_index_in_bracket(db_bracket: dict, target_field: str, target_key: str, target_value):
+def find_index_in_bracket(db_bracket: dict, target_field: str, target_key: str, target_value):
     """
     Returns the index of a dictionary in a bracket list.
     """
@@ -611,27 +611,28 @@ async def disqualify_entrant_main(self: Client, message: Message, db: Database, 
         await message.channel.send(usage)
         return False
     entrant_name = ' '.join(argv[2:])
-
-    reply_message = await message.channel.fetch_message(message.reference.id)
-    # Check if replying to a bracket message
-    try:
-        db_bracket = find_bracket_by_id(db_guild, message.id)
-    except:
+    # Get active bracket
+    db_bracket = find_active_bracket(db_guild)
+    if not db_bracket:
+        await message.channel.send("There are currently no active brackets.")
         return False
-    if db_bracket:
-        return await disqualify_entrant_bracket(self, message, db, db_bracket, entrant_name)
 
-    # TODO: Check if replying to match message
+    # Check if replying to a bracket message
+    if db_bracket['id'] == message.reference.message_id:
+        return await disqualify_entrant_bracket(self, message, db, db_guild, db_bracket, entrant_name)
+
+    # Check if replying to match message
     try:
-        db_match = _match.find_match(db_bracket, message.id)
-    except:
+        db_match = _match.find_match(db_bracket, message.reference.message_id)
+    except Exception as e:
+        printlog("Something went wrong when trying to retrive a match while DQing.", e)
         return False
     if db_match:
-        return await _match.disqualify_entrant_match(self, message, db, db_match, entrant_name)
+        return await _match.disqualify_entrant_match(self, message, db, db_guild, db_bracket, db_match, entrant_name)
     await message.channel.send("DQ must be in reply to a bracket or match message.")
     return False
 
-async def disqualify_entrant_bracket(self: Client, message: Message, db: Database, db_bracket: dict, entrant_name: str):
+async def disqualify_entrant_bracket(self: Client, message: Message, db: Database, db_guild: dict, db_bracket: dict, entrant_name: str):
     """
     Destroys an entrant from a tournament or DQs them if the tournament has already started from a command.
     Bracket version.
@@ -651,9 +652,9 @@ async def disqualify_entrant_bracket(self: Client, message: Message, db: Databas
         return False
 
     # Call dq helper function
-    return await disqualify_entrant(self, message, db, db_bracket, db_entrant)
+    return await disqualify_entrant(self, message, db, db_guild, db_bracket, db_entrant)
 
-async def disqualify_entrant(self: Client, message: Message, db: Database, db_bracket: dict, db_entrant: dict):
+async def disqualify_entrant(self: Client, message: Message, db: Database, db_guild: dict, db_bracket: dict, db_entrant: dict):
     """
     Function to dq an entrant in the database and challonge.
     """
@@ -661,9 +662,11 @@ async def disqualify_entrant(self: Client, message: Message, db: Database, db_br
     challonge_id = db_bracket['challonge']['id']
     entrant_name = db_entrant['name']
     db_entrant['active'] = False
+    entrant_index = find_index_in_bracket(db_bracket, 'entrants', 'id', db_entrant['id'])
+    db_bracket['entrants'][entrant_index] = db_entrant
     # Update entrant in database
     try:
-        await mdb.update_single_document(db, {'name': bracket_name, "entrants.name": db_entrant['name']}, {'$set': {'active': True}}, BRACKETS)
+        await set_bracket(db, db_guild['guild_id'], bracket_name, db_bracket)
     except:
         print("Failed to DQ entrant in database.")
         return False
@@ -692,7 +695,7 @@ async def disqualify_entrant(self: Client, message: Message, db: Database, db_br
     if winner_emote:
         # Report match
         match_message = await message.channel.fetch_message(db_match['id'])
-        await _match.report_match(self, match_message, db, db_bracket, db_match, winner_emote, is_dq=True)
+        await _match.report_match(self, match_message, db, db_guild, db_bracket, db_match, winner_emote, is_dq=True)
     return True
 
 #######################
@@ -708,13 +711,14 @@ async def edit_bracket_message(self: Client, db_bracket: dict, channel: TextChan
     embed = bracket_message.embeds[0]
     embed = update_embed_entrants(db_bracket, embed)
     if not db_bracket['open']:
+        image_embed = None
         try:
             image_embed = create_bracket_image(db_bracket, embed)
         except Exception as e:
             printlog(f"Failed to create image for bracket ['name'='{bracket_name}'].")
             print(e)
         if not image_embed:
-            printlog(f"Error when creating image for bracket ['name'='{bracket_name}'].", e)
+            printlog(f"Error when creating image for bracket ['name'='{bracket_name}'].")
         else:
             embed = image_embed
     if db_bracket['completed']:

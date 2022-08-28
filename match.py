@@ -335,42 +335,33 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     await message.channel.send(f"Match override successful. New winner: {winner['name']} {winner_emote}")
     return True
 
-async def disqualify_entrant_match(self: Client, message: Message, db: Database, db_match: dict, entrant_name: str):
+async def disqualify_entrant_match(self: Client, message: Message, db: Database, db_guild: dict, db_bracket: dict, db_match: dict, entrant_name: str):
     """
     Destroys an entrant from a tournament or DQs them if the tournament has already started from a command.
     Match version.
     """
-    guild = message.channel.guild
-    db_guild = await _guild.find_guild(self, db, guild.id)
-    match_id = db_match['id']
     # Check if entrant exists
-    entrant = None
+    db_entrant = None
     if db_match['player1']['name'].lower() == entrant_name.lower():
-        entrant = db_match['player1']
-        entrant_name = entrant['name']
+        db_entrant = db_match['player1']
+        entrant_name = db_entrant['name']
     elif db_match['player2']['name'].lower() == entrant_name.lower():
-        entrant = db_match['player2']
-        entrant_name = entrant['name']
+        db_entrant = db_match['player2']
+        entrant_name = db_entrant['name']
     else:
         # printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['id'='{match_id}'].")
         await message.channel.send(f"There is no entrant named '{entrant_name}' in this match.")
         return False
 
-    # Fetch bracket the match is in
-    bracket_name = db_match['bracket']['name']
-    bracket = _bracket.find_bracket(db_guild, bracket_name)
-    if not bracket:
-        printlog(f"Failed to get bracket ['name'={bracket_name}] for match ['id'={match_id}].")
-        return False
-
     # Check if already disqualified
-    bracket_entrant = list(filter(lambda elem: elem['name'] == entrant_name, bracket['entrants']))[0]
+    bracket_name = db_bracket['name']
+    bracket_entrant = list(filter(lambda elem: elem['name'] == entrant_name, db_bracket['entrants']))[0]
     if not bracket_entrant['active']:
         await message.channel.send(f"Entrant '{entrant_name}' has already been disqualified from ***{bracket_name}***.")
         return False
 
     # Call dq helper function
-    return await _bracket.disqualify_entrant(self, message, db, bracket, entrant)
+    return await _bracket.disqualify_entrant(self, message, db, db_guild, db_bracket, db_entrant)
 
 ######################
 ## HELPER FUNCTIONS ##
@@ -384,7 +375,7 @@ async def update_player(db: Database, guild_id: int, db_bracket: dict,
     print(updated_player1)
     print(updated_player2)
     bracket_name = db_bracket['name']
-    match_index = _bracket.get_index_in_bracket(db_bracket, MATCHES, 'id', match_id)
+    match_index = _bracket.find_index_in_bracket(db_bracket, MATCHES, 'id', match_id)
     if updated_player1:
         print("test: ", db_bracket['matches'][match_index]['player1'])
         db_bracket['matches'][match_index]['player1'] = updated_player1
@@ -399,7 +390,7 @@ async def set_match(db: Database, guild_id: int, db_bracket: dict, db_match: dic
     Updates the players in a match.
     """
     bracket_name = db_bracket['name']
-    match_index = _bracket.get_index_in_bracket(db_bracket, MATCHES, 'id', db_match['id'])
+    match_index = _bracket.find_index_in_bracket(db_bracket, MATCHES, 'id', db_match['id'])
     db_bracket['matches'][match_index] = db_match
     return await _bracket.set_bracket(db, guild_id, bracket_name, db_bracket)
 

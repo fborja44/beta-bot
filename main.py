@@ -133,31 +133,31 @@ class MyBot(discord.Client):
                     await message.channel.send("Command not recognized.")
 
         # Commands
-        elif message.content.startswith('$cmd'): 
-            usage = 'Usage: `$cmd <option>`'
-            # Parse args
-            argv = message.content.split()
-            argc = len(argv)
-            if argc == 1:
-                return await message.channel.send(usage)
-            # Get option
-            match argv[1]:
-                case "delete":
-                    # Delete existing command
-                    await command.delete_cmd(self, message, db, argv, argc)
-                case "edit":
-                    # Edit existing
-                    await command.edit_cmd(self, message, db, argv, argc)
-                case _:
-                    # Create new command
-                    await command.register_cmd(self, message, db, argv, argc)
+        # elif message.content.startswith('$cmd'): 
+        #     usage = 'Usage: `$cmd <option>`'
+        #     # Parse args
+        #     argv = message.content.split()
+        #     argc = len(argv)
+        #     if argc == 1:
+        #         return await message.channel.send(usage)
+        #     # Get option
+        #     match argv[1]:
+        #         case "delete":
+        #             # Delete existing command
+        #             await command.delete_cmd(self, message, db, argv, argc)
+        #         case "edit":
+        #             # Edit existing
+        #             await command.edit_cmd(self, message, db, argv, argc)
+        #         case _:
+        #             # Create new command
+        #             await command.register_cmd(self, message, db, argv, argc)
         
-        else:
-            # Parse args
-            argv = message.content.split()
-            argc = len(argv)
+        # else:
+        #     # Parse args
+        #     argv = message.content.split()
+        #     argc = len(argv)
 
-            await command.call_cmd(self, message, db, argv, argc)
+        #     await command.call_cmd(self, message, db, argv, argc)
 
 intents = discord.Intents.default()
 intents.members = True
