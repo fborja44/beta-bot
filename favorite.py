@@ -5,6 +5,7 @@ from pprint import pprint
 import mdb
 
 # favorite.py
+# DEPRECATED
 # Hall of Fame messages
 
 FAVORITES = 'favorites'

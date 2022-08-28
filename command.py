@@ -6,6 +6,7 @@ import mdb
 import re
 
 # command.py
+# DEPRECATED
 # $cmd custom commands
 
 COMMANDS = 'commands'
