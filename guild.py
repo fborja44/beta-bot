@@ -45,7 +45,6 @@ async def add_guild(self: Client, db: Database, guild: Guild):
         "guild_id": guild.id,
         "name": guild.name,
         "brackets": [],
-        "matches": [],
         "commands": [],
         "favorites": [],
         "leaderboard": [],
@@ -60,7 +59,6 @@ async def add_guild(self: Client, db: Database, guild: Guild):
     print(f"Failed to add guild ['name'='{guild.name}'] to database.")
     return None
     
-
 async def update_guild(self: Client, db: Database, guild: Guild):
     """
     Updates a guild document in the database.
@@ -113,8 +111,3 @@ async def pull_from_guild(self: Client, db: Database, guild: Guild, target_array
         return document
     print(f"Failed to pull subdocument ['id'={document_id}] to field '{target_array}' in guild ['name'='{guild.name}'].")
     return None
-
-async def update_in_guild(self: Client, db: Database, guild: Guild, target_array: str, document: dict):
-    """
-    Updates a subdocument in a guild.
-    """
