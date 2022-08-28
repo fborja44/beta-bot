@@ -66,10 +66,16 @@ def find_most_recent_bracket(db_guild: dict, completed: bool):
     Returns the most recently created bracket in a guild that has not yet been completed
     """
     guild_brackets = db_guild['brackets']
-    guild_brackets.sort(key=lambda bracket: bracket['created_at'], reverse=True)
     try:
-        return list(filter(lambda bracket: bracket['completed'] == completed, guild_brackets))[0]
-    except:
+        if completed:
+            guild_brackets = list(filter(lambda bracket: bracket['completed'] is not False, guild_brackets))
+            guild_brackets.sort(key=lambda bracket: bracket['completed'], reverse=True)
+            return list(filter(lambda bracket: bracket['completed'] is not False, guild_brackets))[0]
+        else:
+            guild_brackets.sort(key=lambda bracket: bracket['created_at'], reverse=True)
+            return list(filter(lambda bracket: not bracket['completed'] , guild_brackets))[0]
+    except Exception as e:
+        print(e)
         return None
 
 async def add_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
