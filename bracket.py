@@ -56,16 +56,21 @@ def find_active_bracket(db_guild):
     """
     Returns the current active bracket in a guild.
     """
-    for guild_bracket in db_guild['brackets']:
-        if not guild_bracket['open']:
-            db_bracket = guild_bracket
-            return db_bracket
-    return None
+    try:
+        return list(filter(lambda bracket: not bracket['open'] and not bracket['completed'], db_guild['brackets']))[0]
+    except:
+        return None
 
 def find_most_recent_bracket(db_guild):
     """
-    Returns the most recent bracket in a guild.
+    Returns the most recently created bracket in a guild that has not yet been completed
     """
+    guild_brackets = db_guild['brackets']
+    guild_brackets.sort(key=lambda bracket: bracket['created_at'], reverse=True)
+    try:
+        return list(filter(lambda bracket: not bracket['completed'], guild_brackets))[0]
+    except:
+        return None
 
 async def add_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
@@ -114,6 +119,7 @@ async def add_bracket(self: Client, message: Message, db: Database, argv: list, 
 
         new_bracket = {
             'id': None, 
+            'channel_id': message.channel.id,
             'name': bracket_name, 
             'jump_url': message.jump_url,
             'result_url': None,
@@ -125,6 +131,7 @@ async def add_bracket(self: Client, message: Message, db: Database, argv: list, 
                 'url': bracket_challonge['full_challonge_url'] },
             'entrants': [], 
             'matches': [],
+            'created_at': datetime.now(),
             'starttime': time, 
             'endtime': None, 
             'completed': False,
@@ -177,8 +184,12 @@ async def delete_bracket(self: Client, message: Message, db: Database, argv: lis
     if message.author.id != db_bracket['author']['id'] or not message.author.guild_permissions.administrator:
         await message.channel.send(f"Only the author or server admins can delete brackets.")
         return False
+    # Check if in channel bracket was created in
+    if db_bracket['channel_id'] != message.channel.id:
+        await message.channel.send(f"Must be in the channel that the bracket was created in: <#{db_bracket['channel_id']}>")
+        return False
     # Delete every match message and document associated with the bracket
-    #await delete_all_matches(self, message, db, bracket)
+    await delete_all_matches(self, message, db, db_bracket)
     # Delete bracket document
     try:
         result = await _guild.pull_from_guild(self, db, guild, BRACKETS, db_bracket)
@@ -196,7 +207,7 @@ async def delete_bracket(self: Client, message: Message, db: Database, argv: lis
         except Exception as e:
             printlog(f"Failed to delete bracket [id='{db_bracket['id']}] from challonge [id='{db_bracket['challonge']['id']}].", e)
             retval = False
-        print(f"User '{message.author.name}' [id={message.author.id}] deleted bracket '{bracket_name}'.")
+        printlog(f"User '{message.author.name}' [id={message.author.id}] deleted bracket '{bracket_name}'.")
         await message.channel.send(f"Successfully deleted bracket '{bracket_name}'.")
     else:
         await message.channel.send(f"Failed to delete bracket '{bracket_name}'.")
@@ -216,6 +227,10 @@ async def update_bracket(self: Client, message: Message, db: Database, argv: lis
     if message.author.id != db_bracket['author']['id'] or not message.author.guild_permissions.administrator:
         await message.channel.send(f"Only the author or server admins can update the bracket.")
         return False
+    # Check if in channel bracket was created in
+    if db_bracket['channel_id'] != message.channel.id:
+        await message.channel.send(f"Must be in the channel that the bracket was created in: <#{db_bracket['channel_id']}>")
+        return False
 
 async def start_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
@@ -232,6 +247,10 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
     if message.author.id != db_bracket['author']['id'] or not message.author.guild_permissions.administrator:
         await message.channel.send(f"Only the author or server admins can start the bracket.")
         return False
+    # Check if in channel bracket was created in
+    if db_bracket['channel_id'] != message.channel.id:
+        await message.channel.send(f"Must be in the channel that the bracket was created in: <#{db_bracket['channel_id']}>")
+        return False
     # Check if already started
     if not db_bracket['open']:
         await message.channel.send(f"'{bracket_name}' has already been started.")
@@ -241,13 +260,13 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
         await message.channel.send(f"Bracket must have at least 2 entrants before starting.")
         return False
     # Only allow one bracket to be started at a time in a guild
-    for guild_bracket in db_guild['brackets']:
-        if guild_bracket['id'] != db_bracket['id'] and not guild_bracket['open'] and not guild_bracket['completed']:
-            await message.channel.send(f"Only one bracket may be active at a time per server.")
-            return False
+    active_bracket = find_active_bracket(db_guild)
+    if active_bracket and active_bracket['id'] == db_bracket['id']:
+        await message.channel.send(f"There may only be one active bracket per server.")
+        return False
     # Start bracket on challonge
     start_response = challonge.tournaments.start(db_bracket['challonge']['id'], include_participants=1, include_matches=1)
-    print(f"Succesfully started bracket '{bracket_name}' [id={db_bracket['id']}].")
+    printlog(f"User ['name'='{message.author.name}'] started bracket '{bracket_name}' [id={db_bracket['id']}].")
     # Get total number of rounds
     max_round = 0
     for match in start_response['matches']:
@@ -257,8 +276,10 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
     # Set bracket to closed in database and set total number of rounds
     db_bracket.update({'open': False, 'num_rounds': max_round })
     updated_bracket = await set_bracket(db, guild.id, bracket_name, db_bracket)
+    print(f"User ['name'='{message.author.name}'] started bracket ['name'='{bracket_name}'].")
     # Send start message
-    await message.channel.send(content=f"***{bracket_name}*** has now started!", reference=message) # Reply to original bracket message
+    bracket_message = await message.channel.fetch_message(db_bracket['id'])
+    await message.channel.send(content=f"***{bracket_name}*** has now started!", reference=bracket_message) # Reply to original bracket message
     # Get each initial open matches
     matches = list(filter(lambda match: (match['match']['state'] == 'open'), start_response['matches']))
     for match in matches:
@@ -278,12 +299,16 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
     # Fetch bracket
     usage = 'Usage: `$bracket finalize [name]`'
     completed_time = datetime.now()
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc)
+    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, active=True)
     if not db_bracket:
         return False
     # Only allow author or guild admins to finalize bracket
     if message.author.id != db_bracket['author']['id'] or not message.author.guild_permissions.administrator:
         await message.channel.send(f"Only the author or server admins can finalize the bracket.")
+        return False
+    # Check if in channel bracket was created in
+    if db_bracket['channel_id'] != message.channel.id:
+        await message.channel.send(f"Must be in the channel that the bracket was created in: <#{db_bracket['channel_id']}>")
         return False
     # Check if already finalized
     if db_bracket['completed']:
@@ -314,7 +339,7 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
         return False
     # Update embed message
     await edit_bracket_message(self, db_bracket, message.channel)
-    print(f"Finalized bracket '{bracket_name}' ['id'='{db_bracket['id']}'].")
+    print(f"User ['name'='{message.author.name}'] Finalized bracket '{bracket_name}' ['id'='{db_bracket['id']}'].")
     return True
 
 async def send_results(self: Client, message: Message, db: Database, argv: list, argc: int):
@@ -325,7 +350,6 @@ async def send_results(self: Client, message: Message, db: Database, argv: list,
     db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False, completed=True)
     bracket_message_id = db_bracket['id']
     challonge_id = db_bracket['challonge']['id']
-
     # Check if bracket is completed
     if not db_bracket['completed']:
         await message.channel.send(f"***{bracket_name}*** has not yet been finalized.")
@@ -350,10 +374,14 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
     guild: Guild = message.guild
     # Fetch bracket
     usage = 'Usage: `$bracket reset [name]`'
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False)
+    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False, active=True)
     bracket_message_id = db_bracket['id']
     challonge_id = db_bracket['challonge']['id']
     if not db_bracket:
+        return False
+    # Check if in channel bracket was created in
+    if db_bracket['channel_id'] != message.channel.id:
+        await message.channel.send(f"Must be in the channel that the bracket was created in: <#{db_bracket['channel_id']}>")
         return False
     # Only allow author or guild admins to finalize bracket
     if message.author.id != db_bracket['author']['id'] or not message.author.guild_permissions.administrator:
@@ -373,6 +401,7 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
     # Set open to true and reset number of rounds
     db_bracket.update({'open': True, 'num_rounds': None })
     updated_bracket = await set_bracket(db, guild.id, bracket_name, db_bracket)
+    print(f"User ['name'='{message.author.name}'] reset bracket ['name'='{bracket_name}'].")
     # Reset bracket message
     bracket_message = await message.channel.fetch_message(bracket_message_id)
     new_bracket_embed = create_bracket_embed(db_bracket)
@@ -384,27 +413,38 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
 ## HELPER FUNCTIONS ##
 ######################
 
-async def parse_args(self: Client, message: Message, db: Database, usage: str, argv: list, argc: int, f_argc: int=2, send: bool=True, completed: bool=False):
+async def parse_args(self: Client, message: Message, db: Database, usage: str, argv: list, argc: int, f_argc: int=2, 
+                     send: bool=True, completed: bool=False, active=False):
     """"
     Parses arguments for bracket functions. Checks if there is a valid bracket.
     """
     guild: Guild = message.guild
     db_guild = await _guild.find_guild(self, db, guild.id)
     if argc < f_argc:
-        return await message.channel.send(usage)
+        await message.channel.send(usage)
+        return (None, None)
     # Get bracket from database
     if argc >= f_argc + 1:
         bracket_name = ' '.join(argv[2:]) # Get bracket name
         # Check if bracket exists
         db_bracket = find_bracket(db_guild, bracket_name)
         if not db_bracket:
-            if send: await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
+            if send: 
+                await message.channel.send(f"Bracket with name '{bracket_name}' does not exist.")
             return (None, None)
     elif argc < f_argc + 1:
-        # TODO: Get by reply
-        if not db_bracket:
-            if send: await message.channel.send(f"There are currently no open brackets.")
-            return (None, None)
+        if active: # Get active bracket, if exists
+            db_bracket = find_active_bracket(db_guild)
+            if not db_bracket:
+                if send: 
+                    await message.channel.send(f"There are currently no active brackets.")
+                return (None, None)
+        else: # Get most recently created bracket
+            db_bracket = find_most_recent_bracket(db_guild)
+            if not db_bracket:
+                if send: 
+                    await message.channel.send(f"There are currently no open brackets.")
+                return (None, None)
         bracket_name = db_bracket['name']
     return (db_bracket, bracket_name)
 
@@ -452,11 +492,11 @@ async def delete_all_matches(self: Client, message: Message, db: Database, db_br
     bracket_name = db_bracket['name']
     retval = True
     for match in db_bracket['matches']:
-        match_id = match['match_id']
+        match_id = match['id']
         try:
             await _match.delete_match(self, message, db, db_bracket, match_id)
         except:
-            print(f"Failed to delete match ['match_id'={match_id}] while deleting bracket ['name'={bracket_name}].")
+            print(f"Failed to delete match ['id'={match_id}] while deleting bracket ['name'={bracket_name}].")
             retval = False
     return retval
 
@@ -638,7 +678,7 @@ async def disqualify_entrant(self: Client, message: Message, db: Database, db_br
     winner_emote = None
     for bracket_match in db_bracket['matches']:
         # Get match document
-        db_match = _match.find_match(db_bracket, bracket_match['match_id'])
+        db_match = _match.find_match(db_bracket, bracket_match['id'])
         # Check if match is open
         if db_match['completed']:
             continue
@@ -664,18 +704,19 @@ async def edit_bracket_message(self: Client, db_bracket: dict, channel: TextChan
     Edits bracket embed message in a channel.
     """
     bracket_name = db_bracket['name']
-    print("bracket: ", db_bracket)
     bracket_message: Message = await channel.fetch_message(db_bracket['id'])
     embed = bracket_message.embeds[0]
     embed = update_embed_entrants(db_bracket, embed)
     if not db_bracket['open']:
         try:
-            embed = create_bracket_image(db_bracket, embed)
+            image_embed = create_bracket_image(db_bracket, embed)
         except Exception as e:
             printlog(f"Failed to create image for bracket ['name'='{bracket_name}'].")
             print(e)
-        if not embed:
+        if not image_embed:
             printlog(f"Error when creating image for bracket ['name'='{bracket_name}'].", e)
+        else:
+            embed = image_embed
     if db_bracket['completed']:
         time_str = db_bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
         embed.set_footer(text=f'Completed: {time_str}')
@@ -708,6 +749,7 @@ def create_bracket_image(db_bracket: dict, embed: Embed):
     challonge_url = db_bracket['challonge']['url']
     if len(db_bracket['entrants']) >= 2:
         svg_url = f"{challonge_url}.svg"
+        print("svg_url: ", svg_url)
         png_data = svg2png(url=svg_url) # Convert svg to png
         payload = {
             'image': png_data

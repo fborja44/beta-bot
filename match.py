@@ -75,6 +75,7 @@ async def add_match(self: Client, message: Message, db: Database, guild: Guild, 
     new_match['id'] = match_message.id
     try:
         updated_guild = await _bracket.add_to_bracket(db, guild_id, bracket_name, MATCHES, new_match)
+        print(f"Added new match ['id'='{match_message.id}'] to bracket ['name'='{bracket_name}'].")
     except Exception as e:
         printlog(f"Failed to add match ['id'={new_match['id']}] to bracket ['name'='{bracket_name}'].", e)
         return None
@@ -96,6 +97,7 @@ async def delete_match(self: Client, message: Message, db: Database, db_bracket:
         # Delete from matches
         try:
             updated_guild = await _bracket.remove_from_bracket(db, guild_id, bracket_name, MATCHES, match_id)
+            print(f"Deleted match ['id'='{db_match['id']}'] from bracket ['name'='{bracket_name}'].")
         except:
             print(f"Failed to delete match [id='{match_id}'] from database.")
             return False
@@ -241,18 +243,21 @@ async def report_match(self: Client, match_message: Message, db: Database, db_gu
             print("Failed to check match in database..")
             return None, None
         if check_match:
+            print("match found")
             continue
         new_match = await add_match(self, match_message, db, guild, db_bracket, challonge_match)
+        db_bracket['matches'].append(new_match)
         # Add new match message_id to old match's next_matches list
         try:
-            db_match['next_matches'].append(new_match)
+            db_match['next_matches'].append(new_match['id'])
             await set_match(db, guild.id, db_bracket, db_match)
+            print(f"Added new match ['id'={new_match['id']}] to completed match's ['id'='{db_match['id']}'] next matches.")
         except:
             print(f"Failed to add new match ['id'='{new_match['id']}'] to next_matches of match ['id'='{match_id}']")
     
     # Update bracket embed
     try:
-        bracket_message: Message = await match_message.channel.fetch_message(db_bracket['message_id'])
+        bracket_message: Message = await match_message.channel.fetch_message(db_bracket['id'])
         updated_bracket_embed = _bracket.create_bracket_image(db_bracket, bracket_message.embeds[0])
         await bracket_message.edit(embed=updated_bracket_embed)
     except Exception as e:
@@ -326,8 +331,7 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
 
     # Report match
     reported_match, winner = await report_match(self, match_message, db, db_guild, db_bracket, db_match, winner_emote)
-
-    print("Match succesfully overwritten.")
+    printlog(f"User ['name'='{message.author.name}'] overwrote match ['id'='{db_match['id']}'] New winner: {winner['name']} {winner_emote}.")
     await message.channel.send(f"Match override successful. New winner: {winner['name']} {winner_emote}")
     return True
 
