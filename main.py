@@ -1,11 +1,13 @@
 from discord import Guild, Message
 from colorama import Fore, Back, Style
+from common import CHALLONGE_USER, CHALLONGE_KEY, MONGO_ADDR, TOKEN
 from dotenv import load_dotenv
 from pprint import pprint
 from pydoc import describe
 from pymongo import MongoClient
 import bracket
 import command
+import challenge
 import challonge
 import discord
 import favorite
@@ -16,13 +18,6 @@ import os
 
 # main.py
 # beta-bot program
-
-load_dotenv()
-
-TOKEN = os.getenv('TOKEN')
-MONGO_ADDR = os.getenv('MONGO')
-CHALLONGE_USER = os.getenv('CHALLONGE_USER')
-CHALLONGE_KEY = os.getenv('CHALLONGE_KEY')
 
 challonge.set_credentials(CHALLONGE_USER, CHALLONGE_KEY)
 
@@ -109,7 +104,7 @@ class MyBot(discord.Client):
             # Get option
             match argv[1].lower():
                 case "create":
-                    await bracket.add_bracket(self, message, db, argv, argc)
+                    await bracket.create_bracket(self, message, db, argv, argc)
                 case "edit":
                     await bracket.update_bracket(self, message, db, argv, argc)
                 case "delete":
@@ -131,6 +126,31 @@ class MyBot(discord.Client):
                 case _:
                     # TODO: List options
                     await message.channel.send("Command not recognized.")
+
+        # Challenges
+        elif message.content.startswith('$challenge'):
+            usage = 'Usage: `$challenge <option>`'
+            # Parse args
+            argv = message.content.split()
+            argc = len(argv)
+            if argc == 1:
+                return await message.channel.send(usage)
+            # Get option
+            match argv[1].lower():
+                case "create":
+                    await challenge.create_challenge_queue(self, message, db, argv, argc)
+                case "cancel":
+                    await challenge.cancel_challenge(self, message, db, argv, argc)
+                case "override":
+                    pass
+                case "test":
+                    pass
+                case _:
+                    if argc >= 2:
+                        await challenge.create_challenge_direct(self, message, db, argv, argc)
+                    else:
+                        # TODO: list options
+                        pass
 
         # Commands
         # elif message.content.startswith('$cmd'): 

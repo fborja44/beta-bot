@@ -1,4 +1,5 @@
 from cgi import print_exception
+from common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL
 from datetime import datetime, timedelta, date
 from discord import Client, Embed, Guild, Message, Member, RawReactionActionEvent, TextChannel
 from dotenv import load_dotenv
@@ -22,12 +23,6 @@ from cairosvg import svg2png # SVG to PNG
 
 load_dotenv()
 
-BRACKETS = 'brackets'
-GUILDS = 'guilds'
-MATCHES = 'matches'
-ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-bd10359b8556-profile_image-70x70.png'
-IMGUR_CLIENT_ID = os.getenv('IMGUR_ID')
-IMGUR_URL = 'https://api.imgur.com/3'
 os.environ['path'] += r';C:\Program Files\UniConvertor-2.0rc5\dlls'
 
 time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9] ([AaPp][Mm])$') # ex. 10:00 AM
@@ -52,7 +47,7 @@ def find_bracket_by_id(db_guild: dict, bracket_id: int):
         return result[0]
     return None
 
-def find_active_bracket(db_guild):
+def find_active_bracket(db_guild: dict):
     """
     Returns the current active bracket in a guild.
     """
@@ -78,34 +73,19 @@ def find_most_recent_bracket(db_guild: dict, completed: bool):
         print(e)
         return None
 
-async def add_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
+async def create_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
-    Adds a new bracket document to the database.
+    Creates a new bracket and adds it to the guild in the database.
     """
     guild: Guild = message.guild
     db_guild = await _guild.find_add_guild(self, db, guild)
     # Check args
     usage = 'Usage: `$bracket create <name> [time]`'
     if argc < 3:
-        return await message.channel.send(usage)
-
+        await message.channel.send(usage)
+        return None
     # Parse time; Default is 1 hour from current time
-    text_match1 = time_re_long.search(message.content.strip()) # Check for long time
-    text_match2 = time_re_short.search(message.content.strip()) # Check for short time
-    if not text_match1 and not text_match2:
-        time = datetime.now() + timedelta(hours=1)
-        text_match = None
-    else:
-        current_time = datetime.now()
-        if text_match1:
-            text_match = text_match1.span()
-            time = datetime.strptime(f'{date.today()} {text_match1.group()}', '%Y-%m-%d %I:%M %p')
-        elif text_match2:
-            text_match = text_match2.span()
-            time = datetime.strptime(f'{date.today()} {text_match2.group()}', '%Y-%m-%d %I %p')
-        # Check if current time is before time on current date; If so, go to next day
-        if current_time > time:
-            time += timedelta(days=1)
+    time, text_match = parse_time(message.content)
 
     # Get bracket name
     if text_match:
@@ -113,12 +93,13 @@ async def add_bracket(self: Client, message: Message, db: Database, argv: list, 
     bracket_name = ' '.join(argv[2:]) 
     # Max character length == 60
     if len(bracket_name.strip()) > 60:
-        return await message.channel.send(f"Bracket name can be no longer than 60 characters.")
+        await message.channel.send(f"Bracket name can be no longer than 60 characters.")
+        return None
     # Check if bracket already exists
     db_bracket = find_bracket(db_guild, bracket_name)
     if db_bracket:
-        return await message.channel.send(f"Bracket with name '{bracket_name}' already exists.")
-    
+        await message.channel.send(f"Bracket with name '{bracket_name}' already exists.")
+        return None
     try:
         # Create challonge bracket
         bracket_challonge = challonge.tournaments.create(name=bracket_name, url=None, tournament_type='double elimination', start_at=time, show_rounds=True, private=True, quick_advance=True, open_signup=False)
@@ -213,7 +194,7 @@ async def delete_bracket(self: Client, message: Message, db: Database, argv: lis
         except Exception as e:
             printlog(f"Failed to delete bracket [id='{db_bracket['id']}] from challonge [id='{db_bracket['challonge']['id']}].", e)
             retval = False
-        printlog(f"User '{message.author.name}' [id={message.author.id}] deleted bracket '{bracket_name}'.")
+        print(f"User '{message.author.name}' [id={message.author.id}] deleted bracket '{bracket_name}'.")
         await message.channel.send(f"Successfully deleted bracket '{bracket_name}'.")
     else:
         await message.channel.send(f"Failed to delete bracket '{bracket_name}'.")
@@ -290,7 +271,7 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
     matches = list(filter(lambda match: (match['match']['state'] == 'open'), start_response['matches']))
     for match in matches:
         try:
-            await _match.add_match(self, message, db, guild, db_bracket, match['match'])
+            await _match.create_match(self, message, db, guild, db_bracket, match['match'])
         except Exception as e:
             printlog(f"Failed to add match ['match_id'='{match['match']['id']}'] to bracket ['name'='{bracket_name}']", e)
     # Update embed message
@@ -465,7 +446,7 @@ def find_index_in_bracket(db_bracket: dict, target_field: str, target_key: str, 
 
 async def set_bracket(db: Database, guild_id: int, bracket_name: str, new_bracket: dict):
     """
-    Updates the players in a match.
+    Sets a bracket in a guild to the specified document.
     """
     return await mdb.update_single_document(db, 
         {'guild_id': guild_id, 'brackets.name': bracket_name, 'brackets.id': new_bracket['id']}, 
@@ -505,6 +486,30 @@ async def delete_all_matches(self: Client, message: Message, db: Database, db_br
             print(f"Failed to delete match ['id'={match_id}] while deleting bracket ['name'={bracket_name}].")
             retval = False
     return retval
+
+def parse_time(string: str):
+    """
+    Helper function to parse a time string in the format XX:XX AM/PM or XX AM/PM.
+    Returns the date string and the index of the matched time string.
+    If there is no matching time string, returns the current time + 1 hour.
+    """
+    text_match1 = time_re_long.search(string.strip()) # Check for long time
+    text_match2 = time_re_short.search(string.strip()) # Check for short time
+    if not text_match1 and not text_match2:
+        time = datetime.now() + timedelta(hours=1)
+        text_match = None
+    else:
+        current_time = datetime.now()
+        if text_match1:
+            text_match = text_match1.span()
+            time = datetime.strptime(f'{date.today()} {text_match1.group()}', '%Y-%m-%d %I:%M %p')
+        elif text_match2:
+            text_match = text_match2.span()
+            time = datetime.strptime(f'{date.today()} {text_match2.group()}', '%Y-%m-%d %I %p')
+        # Check if current time is before time on current date; If so, go to next day
+        if current_time > time:
+            time += timedelta(days=1)
+    return (time, text_match)
 
 #######################
 ## ENTRANT FUNCTIONS ##
@@ -868,9 +873,9 @@ async def create_test_bracket(self: Client, message: Message, db: Database, argv
         if db_bracket:
             argv = ["$bracket", "delete", bracket_name]
             await delete_bracket(self, message, db, argv, len(argv))
-        # Call add_bracket
+        # Call create_bracket
         argv = ["$bracket", "create", bracket_name]
-        bracket_db, bracket_message, bracket_challonge = await add_bracket(self, message, db, argv, len(argv))
+        bracket_db, bracket_message, bracket_challonge = await create_bracket(self, message, db, argv, len(argv))
         
         # Add first entrant
         member1 = guild.get_member_named('beta#3096')

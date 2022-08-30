@@ -45,7 +45,7 @@ async def add_guild(self: Client, db: Database, guild: Guild):
         "guild_id": guild.id,
         "name": guild.name,
         "brackets": [],
-        # "matches": [],
+        "challenges": [],
         # "commands": [],
         # "favorites": [],
         "leaderboard": [],

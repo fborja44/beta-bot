@@ -1,3 +1,4 @@
+from common import MATCHES, ICON
 from datetime import datetime, timedelta, date
 from discord import Client, Embed, Guild, Message, RawReactionActionEvent, Reaction, TextChannel, User
 from gridfs import Database
@@ -12,11 +13,6 @@ import re
 
 # match.py
 # Bracket matches
-
-BRACKETS = 'brackets'
-GUILDS = 'guilds'
-MATCHES = 'matches'
-ICON = 'https://static-cdn.jtvnw.net/jtv_user_pictures/638055be-8ceb-413e-8972-bd10359b8556-profile_image-70x70.png'
 
 def find_match(db_bracket: dict, match_id: int):
     """
@@ -38,9 +34,9 @@ def find_match_by_challonge_id(db_bracket: dict, challonge_id: int):
         return result[0]
     return None
 
-async def add_match(self: Client, message: Message, db: Database, guild: Guild, db_bracket: dict, challonge_match):
+async def create_match(self: Client, message: Message, db: Database, guild: Guild, db_bracket: dict, challonge_match):
     """
-    Creates a new match.
+    Creates a new match in a bracket.
     """
     bracket_name = db_bracket['name']
     guild_id = guild.id
@@ -54,8 +50,14 @@ async def add_match(self: Client, message: Message, db: Database, guild: Guild, 
     new_match = {
         "id": None,
         "challonge_id": challonge_match['id'],
-        "player1": {'id': player1['id'], 'vote': None},
-        "player2": {'id': player2['id'], 'vote': None},
+        "player1": {
+            'id': player1['id'], 
+            'vote': None
+            },
+        "player2": {
+            'id': player2['id'], 
+            'vote': None
+            },
         "round": challonge_match['round'],
         'completed': False,
         "winner_emote": None,
@@ -116,18 +118,17 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
     guild: Guild = await self.fetch_guild(payload.guild_id)
     db_guild = await _guild.find_guild(self, db, guild.id)
     match_message: Message = await channel.fetch_message(payload.message_id)
-    # Get current active bracket
+
+    # Get current active bracket, if any
     db_bracket = _bracket.find_active_bracket(db_guild)
     if not db_bracket:
         return False
     # Check if reaction was on a match message
     db_match = find_match(db_bracket, match_message.id)
-    if db_match['completed']:
+    if not db_match or db_match['completed']:
         return False
     match_id = db_match['id']
     match_embed = match_message.embeds[0]
-    bracket_name = db_bracket['name']
-    bracket_id = db_bracket['id']
 
     # Check if user was one of the players
     if payload.user_id == db_match['player1']['id']:
@@ -172,6 +173,7 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
         printlog(f"Failed to record vote by user ['discord_id'='{payload.user_id}'] for match ['id'='{match_id}'].", e)
         return False
     if not updated_guild:
+        print(f"Failed to update player while changing vote in match ['id'='{match_id}']")
         return False
 
     # Check if both players voted
@@ -245,7 +247,7 @@ async def report_match(self: Client, match_message: Message, db: Database, db_gu
         if check_match:
             print("match found")
             continue
-        new_match = await add_match(self, match_message, db, guild, db_bracket, challonge_match)
+        new_match = await create_match(self, match_message, db, guild, db_bracket, challonge_match)
         db_bracket['matches'].append(new_match)
         # Add new match message_id to old match's next_matches list
         try:
@@ -406,7 +408,7 @@ def create_match_embed(db_bracket: dict, db_match: dict):
     player1_id = db_match['player1']['id']
     player2_id = db_match['player2']['id']
     time = datetime.now().strftime("%#I:%M %p")
-    embed = Embed(title=get_round_name(db_bracket, match_id, round), description=f"Results Pending\nOpened at {time}", color=0x50C878)
+    embed = Embed(title=f"⚔️ {get_round_name(db_bracket, match_id, round)}", description=f"Awaiting result...\nOpened at {time}", color=0x50C878)
     embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
     embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
     # embed.add_field(name=f'Bracket Link', value=url, inline=False)
@@ -417,7 +419,7 @@ def edit_match_embed_dispute(embed: Embed):
     """
     Updates embed object for disputes.
     """
-    embed.add_field(name="🛑 Score Dispute 🛑", value="Contact a bracket manager or change vote to resolve.")
+    embed.add_field(name="🛑 Result Dispute 🛑", value="Contact a bracket manager or change vote to resolve.")
     embed.color = 0xD4180F
     return embed
 
