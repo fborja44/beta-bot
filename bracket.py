@@ -25,8 +25,8 @@ load_dotenv()
 
 os.environ['path'] += r';C:\Program Files\UniConvertor-2.0rc5\dlls'
 
-time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9] ([AaPp][Mm])$') # ex. 10:00 AM
-time_re_short = re.compile(r'([1-9]|0[1-9]|1[0-2]) ([AaPp][Mm])$')           # ex. 10 PM
+time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9]\s*([AaPp][Mm])$') # ex. 10:00 AM
+time_re_short = re.compile(r'([1-9]|0[1-9]|1[0-2])\s*([AaPp][Mm])$')           # ex. 10 PM
 
 def find_bracket(db_guild: dict, bracket_name: str):
     """
@@ -161,9 +161,10 @@ async def delete_bracket(self: Client, message: Message, db: Database, argv: lis
     Deletes the specified bracket from the database (if it exists).
     """
     guild: Guild = message.guild
+    db_guild = await _guild.find_guild(self, db, guild.id)
     # Fetch bracket
     usage = 'Usage: `$bracket delete [name]`'
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc)
+    db_bracket, bracket_name = await parse_args(self, message, db, db_guild, usage, argv, argc)
     retval = True
     if not db_bracket:
         return False
@@ -199,6 +200,7 @@ async def delete_bracket(self: Client, message: Message, db: Database, argv: lis
     else:
         await message.channel.send(f"Failed to delete bracket '{bracket_name}'.")
         retval = False
+    await message.delete()
     return retval
 
 async def update_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
@@ -206,8 +208,11 @@ async def update_bracket(self: Client, message: Message, db: Database, argv: lis
     Updates the specified bracket in the database (if it exists).
     TODO
     """
+    guild: Guild = message.guild
+    db_guild = await _guild.find_guild(self, db, guild.id)
+    # Fetch bracket
     usage = 'Usage: `$bracket update [name]`'
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False)
+    db_bracket, bracket_name = await parse_args(self, message, db, db_guild, usage, argv, argc, send=False)
     if not db_bracket: 
         return False
     # Only allow author or guild admins to update bracket
@@ -227,7 +232,7 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
     db_guild = await _guild.find_add_guild(self, db, guild)
     # Fetch bracket
     usage = 'Usage: `$bracket start [name]`'
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc)
+    db_bracket, bracket_name = await parse_args(self, message, db, db_guild, usage, argv, argc)
     if not db_bracket: 
         return False
     # Only allow author or guild admins to start bracket
@@ -276,6 +281,7 @@ async def start_bracket(self: Client, message: Message, db: Database, argv: list
             printlog(f"Failed to add match ['match_id'='{match['match']['id']}'] to bracket ['name'='{bracket_name}']", e)
     # Update embed message
     await edit_bracket_message(self, db_bracket, message.channel)
+    await message.delete()
     return True
 
 async def finalize_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
@@ -283,10 +289,11 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
     Closes a bracket if completed.
     """
     guild: Guild = message.guild
+    db_guild = await _guild.find_guild(self, db, guild.id)
     # Fetch bracket
     usage = 'Usage: `$bracket finalize [name]`'
     completed_time = datetime.now()
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, active=True)
+    db_bracket, bracket_name = await parse_args(self, message, db, db_guild, usage, argv, argc, active=True)
     if not db_bracket:
         return False
     # Only allow author or guild admins to finalize bracket
@@ -327,14 +334,18 @@ async def finalize_bracket(self: Client, message: Message, db: Database, argv: l
     # Update embed message
     await edit_bracket_message(self, db_bracket, message.channel)
     print(f"User ['name'='{message.author.name}'] Finalized bracket '{bracket_name}' ['id'='{db_bracket['id']}'].")
+    await message.delete()
     return True
 
 async def send_results(self: Client, message: Message, db: Database, argv: list, argc: int):
     """
     Sends the results message of a bracket that has been completed.
     """
+    guild: Guild = message.guild
+    db_guild = await _guild.find_guild(self, db, guild.id)
+    # Fetch bracket
     usage = 'Usage: `$bracket results <name>`'
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False, completed=True)
+    db_bracket, bracket_name = await parse_args(self, message, db, db_guild, usage, argv, argc, send=False, completed=True)
     bracket_message_id = db_bracket['id']
     challonge_id = db_bracket['challonge']['id']
     # Check if bracket is completed
@@ -352,6 +363,7 @@ async def send_results(self: Client, message: Message, db: Database, argv: list,
     bracket_message = await message.channel.fetch_message(bracket_message_id)
     embed = create_results_embed(db_bracket, final_bracket['participants'])
     result_message = await message.channel.send(reference=bracket_message, embed=embed) # Reply to original bracket message
+    await message.delete()
     return True
 
 async def reset_bracket(self: Client, message: Message, db: Database, argv: list, argc: int):
@@ -359,9 +371,10 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
     Resets a bracket if opened.
     """
     guild: Guild = message.guild
+    db_guild = await _guild.find_guild(self, db, guild.id)
     # Fetch bracket
     usage = 'Usage: `$bracket reset [name]`'
-    db_bracket, bracket_name = await parse_args(self, message, db, usage, argv, argc, send=False, active=True)
+    db_bracket, bracket_name = await parse_args(self, message, db, db_guild, usage, argv, argc, send=False, active=True)
     bracket_message_id = db_bracket['id']
     challonge_id = db_bracket['challonge']['id']
     if not db_bracket:
@@ -394,19 +407,18 @@ async def reset_bracket(self: Client, message: Message, db: Database, argv: list
     new_bracket_embed = create_bracket_embed(db_bracket)
     await bracket_message.edit(embed=new_bracket_embed)
     await message.channel.send(f"Successfully reset bracket '{bracket_name}'.")
+    await message.delete()
     return True
 
 ######################
 ## HELPER FUNCTIONS ##
 ######################
 
-async def parse_args(self: Client, message: Message, db: Database, usage: str, argv: list, argc: int, f_argc: int=2, 
+async def parse_args(self: Client, message: Message, db: Database, db_guild: dict, usage: str, argv: list, argc: int, f_argc: int=2, 
                      send: bool=True, completed: bool=False, active: bool=False):
     """"
     Parses arguments for bracket functions. Checks if there is a valid bracket.
     """
-    guild: Guild = message.guild
-    db_guild = await _guild.find_guild(self, db, guild.id)
     if argc < f_argc:
         await message.channel.send(usage)
         return (None, None)
@@ -706,16 +718,17 @@ async def disqualify_entrant(self: Client, message: Message, db: Database, db_gu
         if db_match['completed']:
             continue
         # Check the players; Other player wins
-        if entrant_name == db_match['player1']['name']:
+        if entrant_name == db_entrant['name']: #TODO: Broken
             winner_emote = '2️⃣'
             break
-        elif entrant_name == db_match['player2']['name']:
+        elif entrant_name == db_entrant['name']:
             winner_emote = '1️⃣'
             break
     if winner_emote:
         # Report match
         match_message = await message.channel.fetch_message(db_match['id'])
         await _match.report_match(self, match_message, db, db_guild, db_bracket, db_match, winner_emote, is_dq=True)
+    await message.delete()
     return True
 
 #######################
@@ -843,7 +856,7 @@ def create_results_embed(db_bracket: dict, entrants: list):
             case 3:
                 results_content += f"> 🥉  {entrant['name']}\n"
             case _:
-                results_content += f"> **{entrant['final_rank']}.** {entrant['name']}"
+                results_content += f"> **{entrant['final_rank']}.** {entrant['name']}\n"
     embed.add_field(name=f'Placements', value=results_content, inline=False)
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
     time_str = db_bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p") # time w/o ms
@@ -881,8 +894,8 @@ async def create_test_bracket(self: Client, message: Message, db: Database, argv
         member1 = guild.get_member_named('beta#3096')
         await add_entrant(self, db, bracket_db, member1, message.channel)
         # Add second entrant
-        member2 = guild.get_member_named("pika!#3722")
-        await add_entrant(self, db, bracket_db, member2, message.channel)
+        # member2 = guild.get_member_named("pika!#3722")
+        # await add_entrant(self, db, bracket_db, member2, message.channel)
         # Add third entrant
         member3 = guild.get_member_named("Wooper#0478")
         await add_entrant(self, db, bracket_db, member3, message.channel)

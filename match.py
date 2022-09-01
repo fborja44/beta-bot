@@ -6,6 +6,7 @@ from logger import printlog
 from pprint import pprint
 import asyncio
 import bracket as _bracket
+import challenge as _challenge
 import challonge
 import guild as _guild
 import mdb
@@ -127,8 +128,19 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
     db_match = find_match(db_bracket, match_message.id)
     if not db_match or db_match['completed']:
         return False
+    
+    # Call main vote_reaction function
+    return await vote_reaction(self, payload, match_message, db, db_guild, db_match, db_bracket)
+
+async def vote_reaction(self: Client, payload: RawReactionActionEvent, match_message: Message, db: Database, 
+                        db_guild: dict, db_match: dict, db_bracket: dict=None):
+    """
+    Main function for voting on match results by reaction
+    """
+    match_type = "match" if db_bracket else "challenge"
     match_id = db_match['id']
     match_embed = match_message.embeds[0]
+    member = match_message.channel.guild.get_member(payload.user_id)
 
     # Check if user was one of the players
     if payload.user_id == db_match['player1']['id']:
@@ -136,67 +148,76 @@ async def vote_match_reaction(self: Client, payload: RawReactionActionEvent, db:
     elif payload.user_id == db_match['player2']['id']:
         voter = db_match['player2']
     else:
+        # Remove reaction
+        await match_message.remove_reaction(payload.emoji, member)
         return False
 
-    member = channel.guild.get_member(payload.user_id)
-    # Record vote or remove vote in database
+    # Record vote or remove vote
     if payload.event_type == 'REACTION_ADD':
         vote = payload.emoji.name
-        action = "Added"
-        try:
-            # Remove other vote if applicable
-            if vote == '1️⃣':
-                await match_message.remove_reaction('2️⃣', member)
-            elif vote == '2️⃣':
-                await match_message.remove_reaction('1️⃣', member)
-        except:
-            pass
+        action = "Added" if not voter['vote'] else "Changed"
+        # Remove other vote if applicable
+        if vote == '1️⃣':
+            await match_message.remove_reaction('2️⃣', member)
+        elif vote == '2️⃣':
+            await match_message.remove_reaction('1️⃣', member)
     elif payload.event_type == 'REACTION_REMOVE':
         if voter['vote'] == payload.emoji.name: # Removed vote
             vote = None
         else:
             return False # Switched vote
         action = "Removed"
+    # Update match player in database
     try:
         player1 = db_match['player1']
         player2 = db_match['player2']
         if voter == db_match['player1']:
             player1['vote'] = vote
-            updated_guild = await update_player(db, guild.id, db_bracket, match_id, updated_player1=player1)
+            if db_bracket:
+                result = await update_player(db, db_guild['guild_id'], db_bracket, match_id, updated_player1=player1)
+            else: 
+                result = await _challenge.update_player(db, db_guild, match_id, updated_player1=player1)
             db_match['player1'] = player1
         else:
             player2['vote'] = vote
-            updated_guild = await update_player(db, guild.id, db_bracket, match_id, updated_player2=player2)
+            if db_bracket:
+                result = await update_player(db, db_guild['guild_id'], db_bracket, match_id, updated_player2=player2)
+            else:
+                result = await _challenge.update_player(db, db_guild, match_id, updated_player2=player2)
             db_match['player2'] = player2
-        print(f"{action} vote by user ['discord_id'='{payload.user_id}'] for match ['id'={match_id}']")
+        print(f"{action} vote by user ['discord_id'='{payload.user_id}'] for {match_type} ['id'={match_id}']")
     except Exception as e:
-        printlog(f"Failed to record vote by user ['discord_id'='{payload.user_id}'] for match ['id'='{match_id}'].", e)
+        printlog(f"Failed to record vote by user ['discord_id'='{payload.user_id}'] for {match_type} ['id'='{match_id}'].", e)
         return False
-    if not updated_guild:
-        print(f"Failed to update player while changing vote in match ['id'='{match_id}']")
+    if not result:
+        print(f"Failed to update player while changing vote in {match_type} ['id'='{match_id}']")
         return False
 
     # Check if both players voted
     if player1['vote'] and player2['vote']:
         # Check who they voted for
         if player1['vote'] == player2['vote']:
-            # Report the match score
-            winner_emote = vote
             # Report match
-            await report_match(self, match_message, db, db_guild, db_bracket, db_match, winner_emote)
+            if db_bracket:
+                await report_match(self, match_message, db, match_message.guild, db_bracket, db_match, vote)
+            else:
+                await _challenge.report_challenge(self, match_message, db, match_message.guild, db_match, vote)
         else:
             # Dispute detected
-            dispute_embed = edit_match_embed_dispute(match_embed)
+            printlog(f"Dispute detected in {match_type} ['id'='{match_id}'].")
+            if db_bracket:
+                dispute_embed = edit_match_embed_dispute(match_embed)
+            else:
+                dispute_embed = _challenge.edit_challenge_embed_dispute(match_embed)
             await match_message.edit(embed=dispute_embed)
     return True
 
-async def report_match(self: Client, match_message: Message, db: Database, db_guild: dict, db_bracket: dict, db_match: dict, winner_emote: str, is_dq: bool=False):
+async def report_match(self: Client, match_message: Message, db: Database, guild: Guild, db_bracket: dict, db_match: dict, winner_emote: str, is_dq: bool=False):
     """
     Reports a match winner and fetches the next matches that have not yet been called.
     """
     bracket_name = db_bracket['name']
     bracket_challonge_id = db_bracket['challonge']['id']
-    guild: Guild = match_message.channel.guild
     match_challonge_id = db_match['challonge_id']
     match_id = db_match['id']
     if winner_emote == '1️⃣':
@@ -278,6 +299,15 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
     if argc < 3 or not message.reference:
         await message.channel.send(usage)
         return False
+    # Fetch active bracket
+    db_bracket = _bracket.find_active_bracket(db_guild)
+    if not db_bracket:
+        return False
+
+    # Only allow author or guild admins to finalize bracket
+    if message.author.id != db_bracket['author']['id'] or not message.author.guild_permissions.administrator:
+        await message.channel.send(f"Only the author or server admins can override match score.")
+        return False
 
     # Check if valid winner was provided
     valid1 = ['1', '1️⃣']
@@ -291,10 +321,6 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
         # Get provided name
         entrant_name = ' '.join(argv[2:])
 
-    # Fetch active bracket
-    db_bracket = _bracket.find_active_bracket(db_guild)
-    if not db_bracket:
-        return False
 
     # Check if replying to a match message
     match_message = await message.channel.fetch_message(message.reference.message_id)
@@ -308,9 +334,11 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
 
     # Find by name if applicable
     if not winner_emote:
-        if db_match['player1']['name'].lower() == entrant_name.lower():
+        player1 = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
+        player2 = _bracket.find_entrant(db_bracket, db_match['player2']['id'])
+        if player1['name'].lower() == entrant_name.lower():
             winner_emote = '1️⃣'
-        elif db_match['player2']['name'].lower() == entrant_name.lower():
+        elif player2['name'].lower() == entrant_name.lower():
             winner_emote = '2️⃣'
         else:
             # printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['id'='{match_id}'].")
@@ -332,9 +360,10 @@ async def override_match_score(self: Client, message: Message, db: Database, arg
                 print(f"Something went wrong when deleting match ['id'={next_match_id}] while deleting bracket ['name'={db_bracket['name']}].")
 
     # Report match
-    reported_match, winner = await report_match(self, match_message, db, db_guild, db_bracket, db_match, winner_emote)
+    reported_match, winner = await report_match(self, match_message, db, guild, db_bracket, db_match, winner_emote)
     printlog(f"User ['name'='{message.author.name}'] overwrote match ['id'='{db_match['id']}'] New winner: {winner['name']} {winner_emote}.")
     await message.channel.send(f"Match override successful. New winner: {winner['name']} {winner_emote}")
+    await message.delete()
     return True
 
 async def disqualify_entrant_match(self: Client, message: Message, db: Database, db_guild: dict, db_bracket: dict, db_match: dict, entrant_name: str):
@@ -342,12 +371,15 @@ async def disqualify_entrant_match(self: Client, message: Message, db: Database,
     Destroys an entrant from a tournament or DQs them if the tournament has already started from a command.
     Match version.
     """
-    # Check if entrant exists
     db_entrant = None
-    if db_match['player1']['name'].lower() == entrant_name.lower():
+    # Check if entrant exists
+    player1 = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
+    player2 = _bracket.find_entrant(db_bracket, db_match['player2']['id'])
+    db_entrant = None
+    if player1['name'].lower() == entrant_name.lower():
         db_entrant = db_match['player1']
         entrant_name = db_entrant['name']
-    elif db_match['player2']['name'].lower() == entrant_name.lower():
+    elif player2['name'].lower() == entrant_name.lower():
         db_entrant = db_match['player2']
         entrant_name = db_entrant['name']
     else:

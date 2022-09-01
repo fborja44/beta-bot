@@ -67,8 +67,13 @@ class MyBot(discord.Client):
             # Update bracket entrants
             await bracket.update_bracket_entrants(self, payload, db)
         elif payload.emoji.name == '1️⃣' or payload.emoji.name == '2️⃣':
-            # Update match vote
-            await match.vote_match_reaction(self, payload, db)
+            # Update match or challenge vote
+            result = await match.vote_match_reaction(self, payload, db)
+            if not result:
+                await challenge.vote_challenge_reaction(self, payload, db)
+        elif payload.emoji.name == '🥊':
+            # Update challenge status
+            await challenge.accept_challenge(self, payload, db)
     
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
         # Check if reacting to self 
@@ -141,6 +146,8 @@ class MyBot(discord.Client):
                     await challenge.create_challenge_queue(self, message, db, argv, argc)
                 case "cancel":
                     await challenge.cancel_challenge(self, message, db, argv, argc)
+                case "delete":
+                    await challenge.cancel_challenge(self, message, db, argv, argc, delete=True)
                 case "override":
                     pass
                 case "test":
