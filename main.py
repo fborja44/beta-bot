@@ -13,6 +13,7 @@ import discord
 import favorite
 import guild as _guild
 import logging
+import logger
 import match
 import os
 
@@ -25,11 +26,11 @@ print(Fore.CYAN + "Starting beta-bot..." + Style.RESET_ALL)
 print(Fore.MAGENTA + "============================================" + Style.RESET_ALL)
 
 # Add logs to discord.log
-logger = logging.getLogger('discord')
-logger.setLevel(logging.DEBUG)
+discord_logger = logging.getLogger('discord')
+discord_logger.setLevel(logging.DEBUG)
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logger.addHandler(handler)
+discord_logger.addHandler(handler)
 
 # Connect to MongoDB
 db_client = MongoClient(MONGO_ADDR)
@@ -48,7 +49,8 @@ class MyBot(discord.Client):
         # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
         # for guild in self.guilds:
         #     await _guild.find_update_add_guild(self, db, guild)
-        print(Fore.YELLOW + f'---\n{bot_client.user} is now ready.' + Style.RESET_ALL)
+        print('---\n' + Fore.YELLOW + f'{bot_client.user} is now ready.' + Style.RESET_ALL)
+        logger.printlog('SESSION START')
 
     async def on_guild_join(self, guild: Guild):
         await _guild.find_update_add_guild(self, db, guild)
@@ -122,7 +124,7 @@ class MyBot(discord.Client):
                     await bracket.reset_bracket(self, message, db, argv, argc)
                 case "results":
                     await bracket.send_results(self, message, db, argv, argc)
-                case "override":
+                case "report":
                     await match.override_match_score(self, message, db, argv, argc)
                 case "dq":
                     await bracket.disqualify_entrant_main(self, message, db, argv, argc)
@@ -131,6 +133,7 @@ class MyBot(discord.Client):
                 case _:
                     # TODO: List options
                     await message.channel.send("Command not recognized.")
+            # await message.delete()
 
         # Challenges
         elif message.content.startswith('$challenge'):
@@ -158,6 +161,7 @@ class MyBot(discord.Client):
                     else:
                         # TODO: list options
                         pass
+            await message.delete()
 
         # Commands
         # elif message.content.startswith('$cmd'): 

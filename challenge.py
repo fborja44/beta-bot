@@ -265,7 +265,7 @@ async def vote_challenge_reaction(self: Client, payload: RawReactionActionEvent,
     # Call main vote_reaction function
     return await _match.vote_reaction(self, payload, challenge_message, db, db_guild, db_challenge)
 
-async def report_challenge(self: Client, challenge_message: Message, db: Database, guild: Guild, db_challenge: dict, winner_emote: str, is_dq: bool=False):
+async def report_challenge(self: Client, challenge_message: Message, db: Database, db_guild: dict, db_challenge: dict, winner_emote: str, is_dq: bool=False):
     """
     Reports a challenge winner and updates the leaderboard
     """
@@ -279,7 +279,7 @@ async def report_challenge(self: Client, challenge_message: Message, db: Databas
     # Update status in db
     try:
         db_challenge.update({'completed': datetime.now(), 'winner_emote': winner_emote})
-        updated_challenge = await set_challenge(db, guild.id, challenge_id, db_challenge)
+        updated_challenge = await set_challenge(db, db_guild['guild_id'], challenge_id, db_challenge)
     except Exception as e:
         printlog(f"Failed to report challenge ['id'={challenge_id}] in database.", e)
         return None, None

@@ -33,16 +33,12 @@ Brackets are generated using the [Challonge.com API](https://api.challonge.com/v
 - Shows the results for the specified bracket if it has been completed. 
 - If no name is provided, shows the results for the most recently completed bracket.
 
-`$bracket dq [entrant_name]` as reply:
-- Disqualifies an entrant from the targeted bracket.
-- Must be in reply to an active bracket or match message.
+`$bracket dq [entrant_name]`:
+- Disqualifies an entrant from the current active bracket.
+- If used in a reply, targets that bracket instead.
 
 ### Bracket Matches
-`$bracket override <entrant_name | 1 | 2>` as reply:
+`$bracket report <entrant_name | 1 | 2>` as reply:
 - Manually reports the winner for a match, or overrides the result of a completed match.
 - All matches ahead of the overwritten match are automatically reset.
 - Must be in reply to a match message.
-
-`$bracket dq [entrant_name]` as reply:
-- Disqualifies an entrant from the targeted match's bracket.
-- Must be in reply to an active bracket or match message.
