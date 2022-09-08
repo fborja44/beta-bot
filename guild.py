@@ -9,35 +9,35 @@ import uuid
 
 GUILDS = 'guilds'
 
-async def find_guild(self: Client, db: Database, guild_id: int):
+async def find_guild(db: Database, guild_id: int):
     """
     Finds a guild in the database.
     """
     return await mdb.find_document(db, {"guild_id": guild_id}, GUILDS)
 
-async def find_add_guild(self: Client, db: Database, guild: Guild):
+async def find_add_guild(db: Database, guild: Guild):
     """
     Finds a guild in the database or adds it if it does not exist.
     """
     guild_id = guild.id
-    db_guild = await find_guild(self, db, guild_id)
+    db_guild = await find_guild(db, guild_id)
     if db_guild:
         return db_guild
     else:
-        return await add_guild(self, db, guild)
+        return await add_guild(db, guild)
 
-async def find_update_add_guild(self: Client, db: Database, guild: Guild):
+async def find_update_add_guild(db: Database, guild: Guild):
     """
     Finds a guild in the database or adds it if it does not exist.
     """
     guild_id = guild.id
-    db_guild = await find_guild(self, db, guild_id)
+    db_guild = await find_guild(db, guild_id)
     if db_guild:
-        return await update_guild(self, db, guild)
+        return await update_guild(db, guild)
     else:
-        return await add_guild(self, db, guild)
+        return await add_guild(db, guild)
 
-async def add_guild(self: Client, db: Database, guild: Guild):
+async def add_guild(db: Database, guild: Guild):
     """
     Creates a guild document in the database
     """
@@ -60,7 +60,7 @@ async def add_guild(self: Client, db: Database, guild: Guild):
     print(f"Failed to add guild ['name'='{guild.name}'] to database.")
     return None
     
-async def update_guild(self: Client, db: Database, guild: Guild):
+async def update_guild(db: Database, guild: Guild):
     """
     Updates a guild document in the database.
     """
@@ -71,7 +71,7 @@ async def update_guild(self: Client, db: Database, guild: Guild):
     print(f"Failed to update guild ['name'='{guild.name}'] in database.")
     return None
 
-async def delete_guild(self: Client, db: Database, guild: Guild):
+async def delete_guild(db: Database, guild: Guild):
     """
     Deletes a guild document in the database.
     """
@@ -82,14 +82,14 @@ async def delete_guild(self: Client, db: Database, guild: Guild):
     print(f"Failed to delete guild ['name'='{guild.name}'] in database.")
     return None
 
-async def push_to_guild(self: Client, db: Database, guild: Guild, target_array: str, document: dict):
+async def push_to_guild(db: Database, guild: Guild, target_array: str, document: dict):
     """
     Adds new document to a guild as a subdocument.
     """
     guild_id = guild.id
     document_id = document['id']
     print(document)
-    await find_update_add_guild(self, db, guild)
+    await find_update_add_guild(db, guild)
     db_guild = await mdb.update_single_document(db, {'guild_id': guild_id}, {'$push': {target_array: document}}, GUILDS)
     if db_guild:
         print(f"Successfully pushed subdocument ['id'={document_id}] to field '{target_array}' in guild ['name'='{guild.name}'].")
@@ -97,13 +97,13 @@ async def push_to_guild(self: Client, db: Database, guild: Guild, target_array: 
     print(f"Failed to push subdocument ['id'={document_id}] to field '{target_array}' in guild ['name'='{guild.name}'].")
     return None
 
-async def pull_from_guild(self: Client, db: Database, guild: Guild, target_array: str, document: dict):
+async def pull_from_guild(db: Database, guild: Guild, target_array: str, document: dict):
     """
     Removes a subdocument from a guild.
     """
     guild_id = guild.id
     document_id = document['id']
-    db_guild = await find_add_guild(self, db, guild)
+    db_guild = await find_add_guild(db, guild)
     if not db_guild:
         return None
     updated_guild = await mdb.update_single_document(db, {'guild_id': guild_id}, {'$pull': {target_array: {'id': document_id}}}, GUILDS)

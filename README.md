@@ -1,5 +1,5 @@
 # **beta-bot**
-**beta-bot** is an interactive discord bot using the [discord.py](https://discordpy.readthedocs.io/en/stable/) library to create and administrate tournaments through Discord text channels.
+**beta-bot** is an interactive discord bot using the [discord.py](https://discordpy.readthedocs.io/en/stable/) [2.0] library to create and administrate tournaments through Discord text channels.
 
 Brackets are generated using the [Challonge.com API](https://api.challonge.com/v1). Bracket images are created and hosted on imgur using the [Imgur API](https://apidocs.imgur.com/).
 
