@@ -1,9 +1,8 @@
 from dotenv import load_dotenv
 from gridfs import Database
 from logger import printlog
-from main import db
 from pprint import pprint
-from pymongo import ReturnDocument, DESCENDING
+from pymongo import MongoClient, ReturnDocument, DESCENDING
 import os
 
 # mdb.py
@@ -12,6 +11,9 @@ import os
 load_dotenv()
 
 MONGO_ADDR = os.getenv('MONGO')
+
+db_client = MongoClient(MONGO_ADDR)
+db = db_client['beta-bot']
 
 async def find_document(target: dict, collection: str, message=None, send_text=None):
     """
