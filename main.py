@@ -192,8 +192,7 @@ tree = app_commands.CommandTree(bot_client)
 BracketGroup = app_commands.Group(name="bracket", description="Bracket commands", guild_ids=[133296587047829505], guild_only=True)
 @BracketGroup.command(description="[Privileged] Creates a test bracket.")
 async def test(interaction: Interaction):
-    pprint(interaction.data)
-    await interaction.response.send_message(f"Testing bracket.")
+    await bracket.create_test_bracket(interaction)
 
 @BracketGroup.command(description="Creates a tournament bracket.")
 async def create(interaction: Interaction, title: str, time: str=""):
@@ -202,6 +201,22 @@ async def create(interaction: Interaction, title: str, time: str=""):
 @BracketGroup.command(description="Deletes a tournament bracket.")
 async def delete(interaction: Interaction, title: str=""):
     await bracket.delete_bracket(interaction, title)
+
+@BracketGroup.command(description="Starts a tournament bracket.")
+async def start(interaction: Interaction, title: str=""):
+    await bracket.start_bracket(interaction, title)
+
+@BracketGroup.command(description="Resets a tournament bracket.")
+async def reset(interaction: Interaction, title: str=""):
+    await bracket.reset_bracket(interaction, title)
+
+@BracketGroup.command(description="Finalizes a tournament bracket.")
+async def finalize(interaction: Interaction, title: str=""):
+    await bracket.finalize_bracket(interaction, title)
+
+@BracketGroup.command(description="Sends the results for a completed tournament bracket.")
+async def results(interaction: Interaction, title: str=""):
+    await bracket.send_results(interaction, title)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 
