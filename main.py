@@ -194,11 +194,11 @@ async def test(interaction: Interaction):
 
 @BracketGroup.command(description="Creates a tournament bracket.")
 async def create(interaction: Interaction, title: str, time: str=""):
-    await bracket.create_bracket(interaction, db, title, time)
+    await bracket.create_bracket(interaction, title, time)
 
 @BracketGroup.command(description="Deletes a tournament bracket.")
 async def delete(interaction: Interaction, title: str=""):
-    await bracket.delete_bracket(interaction, db, title)
+    await bracket.delete_bracket(interaction, title)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 

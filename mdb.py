@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from gridfs import Database
 from logger import printlog
+from main import db
 from pprint import pprint
 from pymongo import ReturnDocument, DESCENDING
 import os
@@ -12,7 +13,7 @@ load_dotenv()
 
 MONGO_ADDR = os.getenv('MONGO')
 
-async def find_document(db: Database, target: dict, collection: str, message=None, send_text=None):
+async def find_document(target: dict, collection: str, message=None, send_text=None):
     """
     Finds a single document in the specifed collection.
     """
@@ -25,7 +26,7 @@ async def find_document(db: Database, target: dict, collection: str, message=Non
         await message.channel.send(send_text)
     return document
 
-async def find_subdocument(db: Database, target_array: str, target_field: str, target_value: dict, collection: str, message=None, send_text=None):
+async def find_subdocument(target_array: str, target_field: str, target_value: dict, collection: str, message=None, send_text=None):
     """
     Finds a single document in the specifed collection.
     """
@@ -42,7 +43,7 @@ async def find_subdocument(db: Database, target_array: str, target_field: str, t
         await message.channel.send(send_text)
     return document
 
-async def find_most_recent_document(db: Database, target: dict, collection: str, message=None, send_text=None):
+async def find_most_recent_document(target: dict, collection: str, message=None, send_text=None):
     """
     Finds the most recently added document in the database.
     """
@@ -55,7 +56,7 @@ async def find_most_recent_document(db: Database, target: dict, collection: str,
         await message.channel.send(send_text)
     return document
 
-async def add_document(db: Database, document: dict, collection: str, message=None, send_text=None):
+async def add_document(document: dict, collection: str, message=None, send_text=None):
     """
     Adds a single document to the specifed collection.
     """
@@ -73,7 +74,7 @@ async def add_document(db: Database, document: dict, collection: str, message=No
         printlog(f"Could not add document to [{collection}]:")
     return None
 
-async def delete_document(db: Database, target: dict, collection: str, message=None, send_text=None):
+async def delete_document(target: dict, collection: str, message=None, send_text=None):
     """
     Deletes a single document from the specifed collection.
     """
@@ -91,7 +92,7 @@ async def delete_document(db: Database, target: dict, collection: str, message=N
         printlog(f"Could not find/delete document in [{collection}]:\ntarget=[{target}]")
     return None
 
-async def update_single_document(db: Database, target: dict, update_obj: dict, collection: str, message=None, send_text=None):
+async def update_single_document(target: dict, update_obj: dict, collection: str, message=None, send_text=None):
     """
     Updates a single field in a document in the specifed collection.
     """
