@@ -1,6 +1,6 @@
 from common import MATCHES, ICON
 from datetime import datetime, timedelta, date
-from discord import Client, Embed, Guild, Message, RawReactionActionEvent, Reaction, TextChannel, User
+from discord import Button, Client, Embed, Guild, Interaction, Member, Message, RawReactionActionEvent, Reaction, TextChannel, User
 from gridfs import Database
 from logger import printlog
 from pprint import pprint
@@ -8,6 +8,7 @@ import asyncio
 import bracket as _bracket
 import challenge as _challenge
 import challonge
+import discord
 import guild as _guild
 import mdb
 import re
@@ -35,7 +36,7 @@ def find_match_by_challonge_id(db_bracket: dict, challonge_id: int):
         return result[0]
     return None
 
-async def create_match(message: Message, db: Database, guild: Guild, db_bracket: dict, challonge_match):
+async def create_match(channel: TextChannel, guild: Guild, db_bracket: dict, challonge_match):
     """
     Creates a new match in a bracket.
     """
@@ -67,22 +68,19 @@ async def create_match(message: Message, db: Database, guild: Guild, db_bracket:
 
     # Send embed message
     embed = create_match_embed(db_bracket, new_match)
-    match_message = await message.channel.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed)
-    # React to match message
-    await match_message.add_reaction('1️⃣')
-    await match_message.add_reaction('2️⃣')
+    match_message = await channel.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed, view=voting_buttons_view())
 
     # Add match document to database
     new_match['id'] = match_message.id
     try:
-        updated_guild = await _bracket.add_to_bracket(db, guild_id, bracket_name, MATCHES, new_match)
+        await _bracket.add_to_bracket(guild_id, bracket_name, MATCHES, new_match)
         print(f"Added new match ['id'='{match_message.id}'] to bracket ['name'='{bracket_name}'].")
     except Exception as e:
         printlog(f"Failed to add match ['id'={new_match['id']}] to bracket ['name'='{bracket_name}'].", e)
         return None
     return new_match
 
-async def delete_match(channel: TextChannel, db: Database, db_bracket: dict, match_id: int):
+async def delete_match(channel: TextChannel, db_bracket: dict, match_id: int):
     """
     Deletes a match.
     """
@@ -97,7 +95,7 @@ async def delete_match(channel: TextChannel, db: Database, db_bracket: dict, mat
     if db_match:
         # Delete from matches
         try:
-            updated_guild = await _bracket.remove_from_bracket(db, guild_id, bracket_name, MATCHES, match_id)
+            await _bracket.remove_from_bracket(guild_id, bracket_name, MATCHES, match_id)
             print(f"Deleted match ['id'='{db_match['id']}'] from bracket ['name'='{bracket_name}'].")
         except:
             print(f"Failed to delete match [id='{match_id}'] from database.")
@@ -111,14 +109,15 @@ async def delete_match(channel: TextChannel, db: Database, db_bracket: dict, mat
         return False
     return True
 
-async def vote_match_reaction(payload: RawReactionActionEvent, db: Database):
+async def vote_match_button(interaction: Interaction, button: Button):
     """
-    Reports the winner for a match using reactions.
+    Reports the winner for a bracket match using buttons.
     """
-    channel: TextChannel = await self.fetch_channel(payload.channel_id)
-    guild: Guild = await self.fetch_guild(payload.guild_id)
-    db_guild = await _guild.find_guild(db, guild.id)
-    match_message: Message = await channel.fetch_message(payload.message_id)
+    channel: TextChannel = interaction.channel
+    guild: Guild = interaction.guild
+    message: Message = interaction.message
+    db_guild = await _guild.find_guild(guild.id)
+    match_message: Message = await channel.fetch_message(message.id)
 
     # Get current active bracket, if any
     db_bracket = _bracket.find_active_bracket(db_guild)
@@ -130,42 +129,38 @@ async def vote_match_reaction(payload: RawReactionActionEvent, db: Database):
         return False
     
     # Call main vote_reaction function
-    return await vote_reaction(payload, match_message, db, db_guild, db_match, db_bracket)
+    return await vote_button(interaction, button, match_message, db_guild, db_match, db_bracket)
 
-async def vote_reaction(payload: RawReactionActionEvent, match_message: Message, db: Database, 
+async def vote_button(interaction: Interaction, button: Button, match_message: Message,
                         db_guild: dict, db_match: dict, db_bracket: dict=None):
     """
-    Main function for voting on match results by reaction
+    Main function for voting on match results by buttons.
+    Used for matches or challenges.
     """
     match_type = "match" if db_bracket else "challenge"
     match_id = db_match['id']
     match_embed: Embed = match_message.embeds[0]
-    member = match_message.channel.guild.get_member(payload.user_id)
-
+    user: Member = interaction.user
+    # Defer response
+    await interaction.response.defer()
     # Check if user was one of the players
-    if payload.user_id == db_match['player1']['id']:
+    if user.id == db_match['player1']['id']:
         voter = db_match['player1']
-    elif payload.user_id == db_match['player2']['id']:
+    elif user.id == db_match['player2']['id']:
         voter = db_match['player2']
     else:
-        # Remove reaction
-        await match_message.remove_reaction(payload.emoji, member)
+        await interaction.followup.send(f"You are not a player in this match.", ephemeral=True)
         return False
-
+    # Check if match is open
+    if db_match['completed']:
+        await interaction.followup.send(f"Vote failed. This match has already been completed.", ephemeral=True)
+        return False
     # Record vote or remove vote
-    if payload.event_type == 'REACTION_ADD':
-        vote = payload.emoji.name
+    if voter['vote'] != button.emoji.name:
+        vote = button.emoji.name
         action = "Added" if not voter['vote'] else "Changed"
-        # Remove other vote if applicable
-        if vote == '1️⃣':
-            await match_message.remove_reaction('2️⃣', member)
-        elif vote == '2️⃣':
-            await match_message.remove_reaction('1️⃣', member)
-    elif payload.event_type == 'REACTION_REMOVE':
-        if voter['vote'] == payload.emoji.name: # Removed vote
-            vote = None
-        else:
-            return False # Switched vote
+    else:
+        vote = None
         action = "Removed"
     # Update match player in database
     try:
@@ -174,23 +169,25 @@ async def vote_reaction(payload: RawReactionActionEvent, match_message: Message,
         if voter == db_match['player1']:
             player1['vote'] = vote
             if db_bracket:
-                result = await update_player(db, db_guild['guild_id'], db_bracket, match_id, updated_player1=player1)
+                result = await update_player(db_guild['guild_id'], db_bracket, match_id, updated_player1=player1)
             else: 
-                result = await _challenge.update_player(db, db_guild, match_id, updated_player1=player1)
+                result = await _challenge.update_player(db_guild, match_id, updated_player1=player1)
             db_match['player1'] = player1
         else:
             player2['vote'] = vote
             if db_bracket:
-                result = await update_player(db, db_guild['guild_id'], db_bracket, match_id, updated_player2=player2)
+                result = await update_player(db_guild['guild_id'], db_bracket, match_id, updated_player2=player2)
             else:
-                result = await _challenge.update_player(db, db_guild, match_id, updated_player2=player2)
+                result = await _challenge.update_player(db_guild, match_id, updated_player2=player2)
             db_match['player2'] = player2
-        print(f"{action} vote by user ['discord_id'='{payload.user_id}'] for {match_type} ['id'={match_id}']")
+        print(f"{action} vote by user ['discord_id'='{user.id}'] for {match_type} ['id'={match_id}']")
     except Exception as e:
-        printlog(f"Failed to record vote by user ['discord_id'='{payload.user_id}'] for {match_type} ['id'='{match_id}'].", e)
+        printlog(f"Failed to record vote by user ['discord_id'='{user.id}'] for {match_type} ['id'='{match_id}'].", e)
+        await interaction.followup.send(f"Something went wrong while voting for {vote}.", ephemeral=True)
         return False
     if not result:
         print(f"Failed to update player while changing vote in {match_type} ['id'='{match_id}']")
+        await interaction.followup.send(f"Something went wrong while voting for {vote}.", ephemeral=True)
         return False
 
     # Check if both players voted
@@ -199,9 +196,9 @@ async def vote_reaction(payload: RawReactionActionEvent, match_message: Message,
         if player1['vote'] == player2['vote']:
             # Report match
             if db_bracket:
-                await report_match(match_message, db, db_guild, db_bracket, db_match, vote)
+                await report_match(match_message, db_guild, db_bracket, db_match, vote)
             else:
-                await _challenge.report_challenge(match_message, db, db_guild, db_match, vote)
+                await _challenge.report_challenge(match_message, db_guild, db_match, vote)
         else:
             # Dispute has occurred
             printlog(f"Dispute detected in {match_type} ['id'='{match_id}'].")
@@ -210,28 +207,28 @@ async def vote_reaction(payload: RawReactionActionEvent, match_message: Message,
             else:
                 dispute_embed = _challenge.edit_challenge_embed_dispute(match_embed)
             await match_message.edit(embed=dispute_embed)
-        return True
-
-    # Otherwise, give other player 2 minutes to vote
-    if payload.event_type == 'REACTION_ADD': # TODO: Test what happens if other player votes between time
-        await asyncio.sleep(10) # TODO: change to 120 seconds
-        # REDO LOGIC:
-        # Make sure vote is the same as previous
-        # If there are no votes, then cancel
-        match_embed.set_footer("")
-        check_bracket = _bracket.find_active_bracket(db_guild)
-        check_match = find_match(check_bracket, db_match['id'])
-        if not (check_match['player1']['vote'] and check_match['player2']['vote']):
-            if db_bracket:
-                await report_match(match_message, db, db_guild, db_bracket, db_match, vote)
-                print("Match vote timed out.")
-            else:
-                await _challenge.report_challenge(match_message, db, db_guild, db_match, vote)
-                print("Match vote timed out.")
+    await interaction.followup.send(f"Successfully voted for {vote}.", ephemeral=True)
     return True
 
+    # Otherwise, give other player 2 minutes to vote
+    # if payload.event_type == 'REACTION_ADD': # TODO: Test what happens if other player votes between time
+    #     await asyncio.sleep(10) # TODO: change to 120 seconds
+    #     # REDO LOGIC:
+    #     # Make sure vote is the same as previous
+    #     # If there are no votes, then cancel
+    #     match_embed.set_footer("")
+    #     check_bracket = _bracket.find_active_bracket(db_guild)
+    #     check_match = find_match(check_bracket, db_match['id'])
+    #     if not (check_match['player1']['vote'] and check_match['player2']['vote']):
+    #         if db_bracket:
+    #             await report_match(match_message, db_guild, db_bracket, db_match, vote)
+    #             print("Match vote timed out.")
+    #         else:
+    #             await _challenge.report_challenge(match_message, db_guild, db_match, vote)
+    #             print("Match vote timed out.")
+    # return True
 
-async def report_match(match_message: Message, db: Database, db_guild: dict, db_bracket: dict, db_match: dict, winner_emote: str, is_dq: bool=False):
+async def report_match(match_message: Message, db_guild: dict, db_bracket: dict, db_match: dict, winner_emote: str, is_dq: bool=False):
     """
     Reports a match winner and fetches the next matches that have not yet been called.
     """
@@ -254,7 +251,7 @@ async def report_match(match_message: Message, db: Database, db_guild: dict, db_
     # Update status in db
     try:
         db_match.update({'completed': datetime.now(), 'winner_emote': winner_emote})
-        updated_match = await set_match(db, db_guild['guild_id'], db_bracket, db_match)
+        await set_match(db_guild['guild_id'], db_bracket, db_match)
     except Exception as e:
         printlog(f"Failed to report match ['id'={match_id}] in database.", e)
         return None, None
@@ -263,8 +260,8 @@ async def report_match(match_message: Message, db: Database, db_guild: dict, db_
     match_embed = match_message.embeds[0]
     entrant1 = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
     entrant2 = _bracket.find_entrant(db_bracket, db_match['player2']['id'])
-    confirm_embed = edit_match_embed_confirmed(match_embed, entrant1, entrant2, winner_emote, is_dq)
-    await match_message.edit(embed=confirm_embed)
+    confirm_embed = edit_match_embed_confirmed(match_embed, match_challonge_id, entrant1, entrant2, winner_emote, is_dq)
+    await match_message.edit(embed=confirm_embed, view=None)
     print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
 
     # Check for matches that have not yet been called
@@ -275,7 +272,7 @@ async def report_match(match_message: Message, db: Database, db_guild: dict, db_
         return None, None
     # Check if last match
     if len(challonge_matches) == 0 and db_match['round'] == db_bracket['num_rounds']:
-        await match_message.channel.send(f"***{bracket_name}*** has been completed! Use `$bracket finalize {bracket_name}` to finalize the results!")
+        await match_message.channel.send(f"***{bracket_name}*** has been completed! Use `/bracket finalize {bracket_name}` to finalize the results!")
         return db_match, winner
     for challonge_match in challonge_matches:
         # Check if match has already been called (in database)
@@ -286,12 +283,12 @@ async def report_match(match_message: Message, db: Database, db_guild: dict, db_
             return None, None
         if check_match:
             continue
-        new_match = await create_match(match_message, db, match_message.guild, db_bracket, challonge_match)
+        new_match = await create_match(match_message.channel, match_message.guild, db_bracket, challonge_match)
         db_bracket['matches'].append(new_match)
         # Add new match message_id to old match's next_matches list
         try:
             db_match['next_matches'].append(new_match['id'])
-            await set_match(db, db_guild['guild_id'], db_bracket, db_match)
+            await set_match(db_guild['guild_id'], db_bracket, db_match)
             print(f"Added new match ['id'={new_match['id']}] to completed match's ['id'='{db_match['id']}'] next matches.")
         except Exception as e:
             print(f"Failed to add new match ['id'='{new_match['id']}'] to next_matches of match ['id'='{match_id}']")
@@ -307,66 +304,68 @@ async def report_match(match_message: Message, db: Database, db_guild: dict, db_
     
     return db_match, winner
     
-async def override_match_score(message: Message, db: Database, argv: list, argc: int):
+async def override_match_result(interaction: Interaction, match_challonge_id: int, winner: str):
     """
     Overrides the results of a match. The status of the match does not matter.
     Only usable by bracket creator or bracket manager
     """
-    guild = message.channel.guild
-    db_guild = await _guild.find_guild(db, guild.id)
-    usage = "Usage: `$bracket report <entrant_name | 1️⃣ | 2️⃣>`. Must be in a reply to a match."
-    if argc < 3 or not message.reference:
-        await message.channel.send(usage)
-        return False
+    guild: Guild = interaction.guild
+    message: Message = interaction.message
+    user: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
+    usage = "Usage: `$bracket report <match_id> <entrant_name | 1️⃣ | 2️⃣>`"
+    # Defer response
+    await interaction.response.defer()
+    # if not winner_emote or not message.reference:
+    #     await interaction.followup.send(usage, ephemeral=True)
+    #     return False
     # Fetch active bracket
     db_bracket = _bracket.find_active_bracket(db_guild)
     if not db_bracket:
+        await interaction.followup.send(f"There are currently no active brackets.", ephemeral=True)
         return False
 
-    # Only allow author or guild admins to finalize bracket
-    if message.author.id != db_bracket['author']['id'] or not message.author.guild_permissions.administrator:
-        await message.channel.send(f"Only the author or server admins can override match score.")
+    # Only allow author or guild admins to manually report results
+    if user.id != db_bracket['author']['id'] or not user.guild_permissions.administrator:
+        await interaction.followup.send(f"Only the author or server admins can override match results.", ephemeral=True)
         return False
 
-    # Check if valid winner was provided
+    # Check if provided emote
     valid1 = ['1', '1️⃣']
     valid2 = ['2', '2️⃣']
     winner_emote = None
-    if argv[2] in valid1:
+    if winner in valid1:
         winner_emote = '1️⃣'
-    elif argv[2] in valid2:
+    elif winner in valid2:
         winner_emote = '2️⃣'
-    else:
-        # Get provided name
-        entrant_name = ' '.join(argv[2:])
 
-
-    # Check if replying to a match message
-    match_message = await message.channel.fetch_message(message.reference.message_id)
+    # Get match
     try:
-        db_match = find_match(db_bracket, match_message.id)
-    except:
+        db_match = find_match_by_challonge_id(db_bracket, match_challonge_id)
+    except Exception as e:
+        printlog(f"Failed to find match ['challonge_id'='{match_challonge_id}'].", e)
+        await interaction.followup.send(f"Something went wrong when finding the match.", ephemeral=True)
         return False
     if not db_match:
-        await message.channel.send("Match override must be in reply to a match message.")
+        await interaction.followup.send(f"Invalid challonge id.\n{usage}", ephemeral=True)
         return False
 
     # Find by name if applicable
     if not winner_emote:
         player1 = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
         player2 = _bracket.find_entrant(db_bracket, db_match['player2']['id'])
-        if player1['name'].lower() == entrant_name.lower():
+        if player1['name'].lower() == winner.lower():
             winner_emote = '1️⃣'
-        elif player2['name'].lower() == entrant_name.lower():
+        elif player2['name'].lower() == winner.lower():
             winner_emote = '2️⃣'
         else:
             # printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['id'='{match_id}'].")
-            await message.channel.send(f"There is no entrant named '{entrant_name}' in this match.")
+            await interaction.followup.send(f"There is no entrant named '{winner}' in this match.\n{usage}", ephemeral=True)
             return False
 
     # Check if actually changing the winner
     if db_match['winner_emote'] is not None and winner_emote == db_match['winner_emote']:
-        await message.channel.send("Match override failed; Winner is the same.")
+        await interaction.followup.send("Match report failed; Winner is the same.", ephemeral=True)
         return False
 
     # Delete previously created matches
@@ -374,22 +373,42 @@ async def override_match_score(message: Message, db: Database, argv: list, argc:
     if len(next_matches) > 0:
         for next_match_id in next_matches:
             try:
-                await delete_match(message, db, db_bracket, next_match_id)
+                await delete_match(message, db_bracket, next_match_id)
             except:
                 print(f"Something went wrong when deleting match ['id'={next_match_id}] while deleting bracket ['name'={db_bracket['title']}].")
 
     # Report match
-    reported_match, winner = await report_match(match_message, db, db_guild, db_bracket, db_match, winner_emote)
-    printlog(f"User ['name'='{message.author.name}'] overwrote match ['id'='{db_match['id']}'] New winner: {winner['name']} {winner_emote}.")
-    await message.channel.send(f"Match override successful. New winner: {winner['name']} {winner_emote}")
+    match_message = await interaction.channel.fetch_message(db_match['id'])
+    try:
+        reported_match, winner = await report_match(match_message, db_guild, db_bracket, db_match, winner_emote)
+    except Exception as e:
+        printlog("bleh", e)
+    printlog(f"User ['name'='{user.name}'] overwrote match ['id'='{db_match['id']}'] New winner: {winner['name']} {winner_emote}.")
+    await interaction.followup.send(content=f"Match report successful. New winner: {winner['name']} {winner_emote}")
     return True
+
+##################
+## BUTTON VIEWS ##
+##################
+
+class voting_buttons_view(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=None)
+
+    @discord.ui.button(emoji='1️⃣', style=discord.ButtonStyle.grey, custom_id="join_bracket")
+    async def vote_player1(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await vote_match_button(interaction, button)
+
+    @discord.ui.button(emoji='2️⃣', style=discord.ButtonStyle.grey, custom_id="leave_bracket")
+    async def vote_player2(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await vote_match_button(interaction, button)
 
 ######################
 ## HELPER FUNCTIONS ##
 ######################
 
-async def update_player(db: Database, guild_id: int, db_bracket: dict, 
-                        match_id: int, updated_player1=None, updated_player2=None):
+async def update_player(guild_id: int, db_bracket: dict, match_id: int, 
+                            updated_player1=None, updated_player2=None):
     """
     Updates the players in a match.
     """
@@ -401,16 +420,16 @@ async def update_player(db: Database, guild_id: int, db_bracket: dict,
         db_bracket['matches'][match_index]['player2'] = updated_player2
     if not (updated_player1 or updated_player2):
         return None
-    return await _bracket.set_bracket(db, guild_id, bracket_name, db_bracket)
+    return await _bracket.set_bracket(guild_id, bracket_name, db_bracket)
 
-async def set_match(db: Database, guild_id: int, db_bracket: dict, db_match: dict):
+async def set_match(guild_id: int, db_bracket: dict, db_match: dict):
     """
     Updates the players in a match.
     """
     bracket_name = db_bracket['title']
     match_index = _bracket.find_index_in_bracket(db_bracket, MATCHES, 'id', db_match['id'])
     db_bracket['matches'][match_index] = db_match
-    return await _bracket.set_bracket(db, guild_id, bracket_name, db_bracket)
+    return await _bracket.set_bracket(guild_id, bracket_name, db_bracket)
 
 #######################
 ## MESSAGE FUNCTIONS ##
@@ -437,7 +456,7 @@ def create_match_embed(db_bracket: dict, db_match: dict):
     else: 
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
     # embed.add_field(name=f'Bracket Link', value=url, inline=False)
-    embed.set_footer(text="Players react with 1️⃣ or 2️⃣ to report the winner.")
+    embed.set_footer(text=f"Players vote with 1️⃣ or 2️⃣ to report the winner.\nchallonge_id: {match_challonge_id}")
     return embed
 
 def edit_match_embed_dispute(embed: Embed):
@@ -448,7 +467,7 @@ def edit_match_embed_dispute(embed: Embed):
     embed.color = 0xD4180F
     return embed
 
-def edit_match_embed_confirmed(embed: Embed, player1: dict, player2: dict, winner_emote: str, is_dq: bool=False):
+def edit_match_embed_confirmed(embed: Embed, match_challonge_id: int, player1: dict, player2: dict, winner_emote: str, is_dq: bool=False):
     """
     Updates embed object for confirmed match
     """
@@ -468,7 +487,7 @@ def edit_match_embed_confirmed(embed: Embed, player1: dict, player2: dict, winne
     if len(embed.fields) > 1:
         # Remove dispute field
         embed.remove_field(1)
-    embed.set_footer(text="Result finalized. To change result, contact a bracket manager.")
+    embed.set_footer(text=f"Result finalized. To change result, contact a bracket manager.\nchallonge_id: {match_challonge_id}")
     embed.color = 0x000000
     return embed
 

@@ -74,7 +74,7 @@ def find_most_recent_bracket(db_guild: dict, completed: bool):
         print(e)
         return None
 
-async def create_bracket(interaction: Interaction, bracket_title: str, time: str=""):
+async def create_bracket(interaction: Interaction, bracket_title: str, time: str="", test: bool = False):
     """
     Creates a new bracket and adds it to the guild in the database.
     """
@@ -90,12 +90,12 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
 
     # Max character length == 60
     if len(bracket_title.strip()) > 60:
-        await channel.send(f"Bracket name can be no longer than 60 characters.")
+        if not test: await interaction.response.send_message(f"Bracket name can be no longer than 60 characters.")
         return None, None, None
     # Check if bracket already exists
     db_bracket = find_bracket(db_guild, bracket_title)
     if db_bracket:
-        await channel.send(f"Bracket with name '{bracket_title}' already exists.")
+        if not test: interaction.response.send_message(f"Bracket with name '{bracket_title}' already exists.")
         return None, None, None
     try:
         # Create challonge bracket
@@ -133,11 +133,11 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         new_bracket['jump_url'] = bracket_message.jump_url
         result = await _guild.push_to_guild(guild, BRACKETS, new_bracket)
         print(f"User '{user.name}' [id={user.id}] created new bracket '{bracket_title}'.")
-        await interaction.response.send_message(f"Successfully created bracket '***{bracket_title}***'.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Successfully created bracket '***{bracket_title}***'.", ephemeral=True)
         return (new_bracket, bracket_message, bracket_challonge)
     except Exception as e:
         await printlog("Something went wrong when creating the bracket.", e)
-        await interaction.response.send_message(f"Something went wrong when creating bracket '***{bracket_title}***'.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Something went wrong when creating bracket '***{bracket_title}***'.", ephemeral=True)
         # Delete challonge tournament
         try:
             challonge.tournaments.destroy(bracket_challonge['id'])
@@ -154,7 +154,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         except: pass
         return None, None, None
 
-async def delete_bracket(interaction: Interaction, bracket_title: str):
+async def delete_bracket(interaction: Interaction, bracket_title: str, test: bool=False):
     """
     Deletes the specified bracket from the database (if it exists).
     """
@@ -164,17 +164,17 @@ async def delete_bracket(interaction: Interaction, bracket_title: str):
     db_guild = await _guild.find_guild(guild.id)
     # Fetch bracket
     # usage = 'Usage: `$bracket delete [title]`'
-    db_bracket, bracket_title = await retrieve_valid_bracket(channel, db_guild, bracket_title)
+    db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title)
     retval = True
     if not db_bracket:
         return False
     # Only allow author or guild admins to delete bracket
     if user != db_bracket['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.response.send_message(f"Only the author or server admins can delete brackets.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Only the author or server admins can delete brackets.", ephemeral=True)
         return False
     # Check if in channel bracket was created in
     if db_bracket['channel_id'] != channel.id:
-        await interaction.response.send_message(f"Must be in the channel that '***{bracket_title}***' was created in: <#{db_bracket['channel_id']}>.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Must be in the channel that '***{bracket_title}***' was created in: <#{db_bracket['channel_id']}>.", ephemeral=True)
         return False
     # Delete every match message and document associated with the bracket
     await delete_all_matches(channel, db_bracket)
@@ -197,9 +197,9 @@ async def delete_bracket(interaction: Interaction, bracket_title: str):
             retval = False
         print(f"User '{user.name}' [id={user.id}] deleted bracket '{bracket_title}'.")
     else:
-        await interaction.response.send_message(f"Failed to delete bracket '***{bracket_title}***'.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Failed to delete bracket '***{bracket_title}***'.", ephemeral=True)
         retval = False
-    await interaction.response.send_message(f"Successfully deleted bracket '***{bracket_title}***'.")
+    if not test: await interaction.response.send_message(f"Successfully deleted bracket '***{bracket_title}***'.")
     return retval
 
 async def update_bracket(interaction: Interaction):
@@ -213,7 +213,7 @@ async def update_bracket(interaction: Interaction):
     db_guild = await _guild.find_guild(guild.id)
     # Fetch bracket
     # usage = 'Usage: `$bracket update [name]`'
-    db_bracket, bracket_title = await retrieve_valid_bracket(channel, db_guild, bracket_title)
+    db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title)
     if not db_bracket: 
         return False
     # Only allow author or guild admins to update bracket
@@ -235,7 +235,7 @@ async def start_bracket(interaction: Interaction, bracket_title: str):
     db_guild = await _guild.find_add_guild(guild)
     # Fetch bracket
     # usage = 'Usage: `$bracket start [title]`'
-    db_bracket, bracket_title = await retrieve_valid_bracket(channel, db_guild, bracket_title)
+    db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title)
     if not db_bracket: 
         return False
     # Only allow author or guild admins to start bracket
@@ -248,7 +248,7 @@ async def start_bracket(interaction: Interaction, bracket_title: str):
         return False
     # Check if already started
     if not db_bracket['open']:
-        await interaction.response.send_message(f"'{bracket_title}' has already been started.", ephemeral=True)
+        await interaction.response.send_message(f"'***{bracket_title}***' has already been started.", ephemeral=True)
         return False
     # Make sure there are sufficient number of entrants
     if len(db_bracket['entrants']) < 2:
@@ -260,12 +260,19 @@ async def start_bracket(interaction: Interaction, bracket_title: str):
         await interaction.response.send_message(f"There may only be one active bracket per server.", ephemeral=True)
         return False
     # Start bracket on challonge
-    start_response = challonge.tournaments.start(db_bracket['challonge']['id'], include_participants=1, include_matches=1)
+    try:
+        start_response = challonge.tournaments.start(db_bracket['challonge']['id'], include_participants=1, include_matches=1)
+    except Exception as e:
+        printlog(f"Failed to start bracket ['title'='{bracket_title}'] on challonge.")
+        await interaction.response.send_message(f"Something went wrong when starting '***{bracket_title}***' on challonge.")
+        return False
     printlog(f"User ['name'='{user.name}'] started bracket '{bracket_title}' [id={db_bracket['id']}].")
+    # Challonge API changed? Retrive matches.
+    challonge_matches = challonge.matches.index(db_bracket['challonge']['id'])
     # Get total number of rounds
     max_round = 0
-    for match in start_response['matches']:
-       round = match['match']['round']
+    for match in challonge_matches:
+       round = match['round']
        if round > max_round:
            max_round = round
     # Set bracket to closed in database and set total number of rounds
@@ -273,15 +280,15 @@ async def start_bracket(interaction: Interaction, bracket_title: str):
     await set_bracket(guild.id, bracket_title, db_bracket)
     print(f"User ['name'='{user.name}'] started bracket ['title'='{bracket_title}'].")
     # Send start message
-    bracket_message = await channel.fetch_message(db_bracket['id'])
-    await interaction.response.send_message(content=f"***{bracket_title}*** has now started!", reference=bracket_message) # Reply to original bracket message
+    # bracket_message = await channel.fetch_message(db_bracket['id'])
+    await interaction.response.send_message(content=f"***{bracket_title}*** has now started!") # Reply to original bracket message
     # Get each initial open matches
-    matches = list(filter(lambda match: (match['match']['state'] == 'open'), start_response['matches']))
+    matches = list(filter(lambda match: (match['state'] == 'open'), challonge_matches))
     for match in matches:
         try:
-            await _match.create_match(interaction, guild, db_bracket, match['match'])
+            await _match.create_match(channel, guild, db_bracket, match)
         except Exception as e:
-            printlog(f"Failed to add match ['match_id'='{match['match']['id']}'] to bracket ['title'='{bracket_title}']", e)
+            printlog(f"Failed to add match ['match_id'='{match['id']}'] to bracket ['title'='{bracket_title}']", e)
     # Update embed message
     await edit_bracket_message(db_bracket, channel)
     return True
@@ -296,11 +303,11 @@ async def reset_bracket(interaction: Interaction, bracket_title: str):
     db_guild = await _guild.find_guild(guild.id)
     # Fetch bracket
     # usage = 'Usage: `$bracket reset [title]`'
-    db_bracket, bracket_title = await retrieve_valid_bracket(channel, db_guild, bracket_title, active=True)
-    bracket_message_id = db_bracket['id']
-    challonge_id = db_bracket['challonge']['id']
+    db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title, active=True)
     if not db_bracket:
         return False
+    bracket_message_id = db_bracket['id']
+    challonge_id = db_bracket['challonge']['id']
     # Check if in channel bracket was created in
     if db_bracket['channel_id'] != channel.id:
         await interaction.response.send_message(f"Must be in the channel that '***{bracket_title}***' was created in: <#{db_bracket['channel_id']}>.", ephemeral=True)
@@ -321,7 +328,7 @@ async def reset_bracket(interaction: Interaction, bracket_title: str):
     except Exception as e:
         printlog(f"Something went wrong when resetting bracket ['title'='{bracket_title}'] on challonge.", e)
     # Set open to true and reset number of rounds
-    db_bracket.update({'open': True, 'num_rounds': None })
+    db_bracket.update({'open': True, 'num_rounds': None, 'matches': []})
     await set_bracket(guild.id, bracket_title, db_bracket)
     print(f"User ['name'='{user.name}'] reset bracket ['title'='{bracket_title}'].")
     # Reset bracket message
@@ -339,23 +346,25 @@ async def finalize_bracket(interaction: Interaction, bracket_title: str):
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
+    # Defer response
+    await interaction.response.defer()
     # Fetch bracket
     # usage = 'Usage: `$bracket finalize [title]`'
     completed_time = datetime.now()
-    db_bracket, bracket_title = await retrieve_valid_bracket(channel, db_guild, bracket_title, active=True)
+    db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title, active=True)
     if not db_bracket:
         return False
     # Only allow author or guild admins to finalize bracket
     if user.id != db_bracket['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.response.send_message(f"Only the author or server admins can finalize the bracket.", ephemeral=True)
+        await interaction.followup.send(f"Only the author or server admins can finalize the bracket.", ephemeral=True)
         return False
     # Check if in channel bracket was created in
     if db_bracket['channel_id'] != channel.id:
-        await interaction.response.send_message(f"Must be in the channel that '***{bracket_title}***' was created in: <#{db_bracket['channel_id']}>.", ephemeral=True)
+        await interaction.followup.send(f"Must be in the channel that '***{bracket_title}***' was created in: <#{db_bracket['channel_id']}>.", ephemeral=True)
         return False
     # Check if already finalized
     if db_bracket['completed']:
-        await interaction.response.send_message(f"'***{bracket_title}***' has already been finalized.", ephemeral=True)
+        await interaction.followup.send(f"'***{bracket_title}***' has already been finalized.", ephemeral=True)
         return False
     challonge_id = db_bracket['challonge']['id']
     # Finalize bracket on challonge
@@ -372,7 +381,7 @@ async def finalize_bracket(interaction: Interaction, bracket_title: str):
     bracket_message = await channel.fetch_message(db_bracket['id'])
     db_bracket['completed'] = completed_time
     embed = create_results_embed(db_bracket, final_bracket['participants'])
-    result_message = await interaction.response.send_message(content=f"***{bracket_title}*** has been finalized. Here are the results!", reference=bracket_message, embed=embed) # Reply to original bracket message
+    result_message = await interaction.followup.send(content=f"***{bracket_title}*** has been finalized. Here are the results!", embed=embed) # Reply to original bracket message
     # Set bracket to completed in database
     try: 
         db_bracket.update({'completed': completed_time, 'result_url': result_message.jump_url})
@@ -394,7 +403,7 @@ async def send_results(interaction: Interaction, bracket_title: str):
     db_guild = await _guild.find_guild(guild.id)
     # Fetch bracket
     usage = 'Usage: `$bracket results <title>`'
-    db_bracket, bracket_title = await retrieve_valid_bracket(channel, db_guild, bracket_title, completed=True)
+    db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title, completed=True)
     bracket_message_id = db_bracket['id']
     challonge_id = db_bracket['challonge']['id']
     if not db_bracket:
@@ -429,7 +438,7 @@ def find_entrant(db_bracket: dict, entrant_id):
         return result[0]
     return None
 
-async def add_entrant(interaction: Interaction, db_bracket: dict=None, member: Member=None):
+async def add_entrant(interaction: Interaction, db_bracket: dict=None, member: Member=None, test: bool=False):
     """
     Adds an entrant to a bracket.
     """
@@ -441,7 +450,7 @@ async def add_entrant(interaction: Interaction, db_bracket: dict=None, member: M
     # Fetch bracket
     db_bracket = db_bracket or find_bracket_by_id(db_guild, message.id)
     if not db_bracket or not db_bracket['open']:
-        await interaction.response.send_message(f"'***{bracket_title}***' is not open for registration.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"'***{bracket_title}***' is not open for registration.", ephemeral=True)
         return False 
     bracket_title = db_bracket['title']
     entrant_ids = [] # list of entrant names
@@ -451,14 +460,14 @@ async def add_entrant(interaction: Interaction, db_bracket: dict=None, member: M
     # Check if already in entrants list
     if user.id in entrant_ids:
         # printlog(f"User ['name'='{user.name}']' is already registered as an entrant in bracket ['title'='{bracket_title}'].")
-        await interaction.response.send_message(f"You have already joined '***{bracket_title}***'.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"You have already joined '***{bracket_title}***'.", ephemeral=True)
         return False
     # Add user to challonge bracket
     try:
         response = challonge.participants.create(challonge_id, user.name)
     except Exception as e:
         printlog(f"Failed to add user ['name'='{user.name}'] to challonge bracket. User may already exist.", e)
-        await interaction.response.send_message(f"Something went wrong when trying to join '***{bracket_title}***'.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Something went wrong when trying to join '***{bracket_title}***'.", ephemeral=True)
         return False
     # Add user to entrants list
     new_entrant = {
@@ -473,7 +482,7 @@ async def add_entrant(interaction: Interaction, db_bracket: dict=None, member: M
         db_bracket['entrants'].append(new_entrant)
     except:
         print(f"Failed to add user '{user.name}' to bracket ['title'='{bracket_title}'] entrants.")
-        await interaction.response.send_message(f"Something went wrong when trying to join '***{bracket_title}***'.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Something went wrong when trying to join '***{bracket_title}***'.", ephemeral=True)
         return False
     if updated_guild:
         print(f"Added entrant '{user.name}' ['id'='{user.id}'] to bracket ['title'='{bracket_title}'].")
@@ -481,9 +490,9 @@ async def add_entrant(interaction: Interaction, db_bracket: dict=None, member: M
         await edit_bracket_message(db_bracket, channel)
     else:
         print(f"Failed to add entrant '{user.name}' ['id'='{user.id}'] to bracket ['title'='{bracket_title}'].")
-        await interaction.response.send_message(f"Something went wrong when trying to join '***{bracket_title}***'.", ephemeral=True)
+        if not test: await interaction.response.send_message(f"Something went wrong when trying to join '***{bracket_title}***'.", ephemeral=True)
         return False
-    await interaction.response.send_message(f"Successfully joined '***{bracket_title}***'.", ephemeral=True)
+    if not test: await interaction.response.send_message(f"Successfully joined '***{bracket_title}***'.", ephemeral=True)
     return True
 
 async def remove_entrant(interaction: Interaction):
@@ -642,27 +651,23 @@ async def disqualify_entrant(channel: TextChannel, db_guild: dict, db_bracket: d
 ## BUTTON VIEWS ##
 ##################
 
-pages = {}
-
 class registration_buttons_view(discord.ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
     @discord.ui.button(label="Join Bracket", style=discord.ButtonStyle.green, custom_id="join_bracket")
     async def join(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
-        print(interaction.message.id)
         await add_entrant(interaction)
 
     @discord.ui.button(label="Leave Bracket", style=discord.ButtonStyle.red, custom_id="leave_bracket")
     async def leave(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
-        print(interaction.message.id)
         await remove_entrant(interaction)
 
 ######################
 ## HELPER FUNCTIONS ##
 ######################
 
-async def retrieve_valid_bracket(channel: TextChannel, db_guild: dict, bracket_title: str, 
+async def retrieve_valid_bracket(interaction: Interaction, db_guild: dict, bracket_title: str, 
                      send: bool=True, completed: bool=False, active: bool=False):
     """"
     Checks if there is a valid bracket
@@ -673,20 +678,20 @@ async def retrieve_valid_bracket(channel: TextChannel, db_guild: dict, bracket_t
         db_bracket = find_bracket(db_guild, bracket_title)
         if not db_bracket:
             if send: 
-                await channel.send(f"Bracket with name '{bracket_title}' does not exist.")
+                await interaction.response.send_message(f"Bracket with name '{bracket_title}' does not exist.")
             return (None, None)
     else:
         if active: # Get active bracket, if exists
             db_bracket = find_active_bracket(db_guild)
             if not db_bracket:
                 if send: 
-                    await channel.send(f"There are currently no active brackets.")
+                    await interaction.response.send_message(f"There are currently no active brackets.")
                 return (None, None)
         else: # Get most recently created bracket
             db_bracket = find_most_recent_bracket(db_guild, completed)
             if not db_bracket:
                 if send: 
-                    await channel.send(f"There are currently no open brackets.")
+                    await interaction.response.send_message(f"There are currently no open brackets.")
                 return (None, None)
         bracket_title = db_bracket['title']
     return (db_bracket, bracket_title)
@@ -705,7 +710,7 @@ async def set_bracket(guild_id: int, bracket_title: str, new_bracket: dict):
     Sets a bracket in a guild to the specified document.
     """
     return await mdb.update_single_document(
-        {'guild_id': guild_id, 'brackets.name': bracket_title, 'brackets.id': new_bracket['id']}, 
+        {'guild_id': guild_id, 'brackets.title': bracket_title, 'brackets.id': new_bracket['id']}, 
         {'$set': {f'brackets.$': new_bracket}
         },
         GUILDS)
@@ -781,6 +786,7 @@ async def edit_bracket_message(db_bracket: dict, channel: TextChannel):
     elif db_bracket['open']:
         status = "🚨 Open for Registration 🚨"
     else:
+        await bracket_message.edit(view=None)
         status = "Started 🟩"
     embed.description = f"Status: {status}"
     if not db_bracket['open']:
@@ -871,7 +877,7 @@ def create_bracket_embed(db_bracket: dict):
     embed.add_field(name='Entrants (0)', value="> *None*", inline=False)
     embed = update_embed_entrants(db_bracket, embed)
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
-    embed.set_footer(text=f'React with ✅ to enter! | Created by {author_name}')
+    embed.set_footer(text=f'Created by {author_name}')
     return embed
 
 def create_results_embed(db_bracket: dict, entrants: list):
@@ -906,11 +912,13 @@ def create_results_embed(db_bracket: dict, entrants: list):
 ## TESTING FUNCTIONS ##
 #######################
 
-async def create_test_bracket(interaction: Interaction):
+async def create_test_bracket(interaction: Interaction, num_entrants: int = 4):
     """
     Testing function. Creates a test bracket and adds two entrants.
     """
     printlog("Creating test bracket...")
+    # Defer response
+    interaction.response.defer()
     bracket_title = "Test Bracket"
     bracket_db , bracket_message , bracket_challonge = None, None, None
     channel: TextChannel = interaction.channel
@@ -925,38 +933,22 @@ async def create_test_bracket(interaction: Interaction):
     try:
         db_bracket = find_bracket(db_guild, bracket_title)
         if db_bracket:
-            await delete_bracket(interaction, bracket_title)
+            await delete_bracket(interaction, bracket_title, test=True)
         # Call create_bracket
-        db_bracket, bracket_message, bracket_challonge = await create_bracket(interaction, bracket_title)
-        # Add first entrant
-        try:
-            member1 = guild.get_member_named('beta#3096')
-            await add_entrant(interaction, db_bracket, member1)
-        except:
-            pass
-        # Add second entrant
-        try:
-            member2 = guild.get_member_named("pika!#3722")
-            await add_entrant(interaction, db_bracket, member2)
-        except:
-            pass
-        # Add third entrant
-        try:
-            member3 = guild.get_member_named("Wooper#0478")
-            await add_entrant(interaction, db_bracket, member3)
-        except:
-            pass
-        # Add fourth entrant
-        try:
-            member4 = guild.get_member_named("WOOPBOT#4140")
-            await add_entrant(interaction, db_bracket, member4)
-        except:
-            pass
+        db_bracket, bracket_message, bracket_challonge = await create_bracket(interaction, bracket_title, test=True)
+
+        members = [guild.get_member_named('beta#3096'), guild.get_member_named("pika!#3722"), guild.get_member_named("Wooper#0478"), guild.get_member_named("WOOPBOT#4140")]
+        for i in range(num_entrants):
+            try:
+                await add_entrant(interaction, db_bracket, members[i], test=True)
+            except:
+                pass
+        await interaction.followup.send(f"Finished creating Test Bracket and entrants.", ephemeral=True)
         return True
     except Exception as e:
-        await printlog("Failed to create test bracket.", channel)
+        printlog("Failed to create test bracket.", channel)
         print_exception(e)
-        await interaction.response.send_message(f"Something went wrong when creating the test bracket.", ephemeral=True)
+        await interaction.followup.send(f"Something went wrong when creating the test bracket.", ephemeral=True)
         if bracket_message:
-            await delete_bracket(interaction, bracket_title)
+            await delete_bracket(interaction, bracket_title, test=True)
         return False

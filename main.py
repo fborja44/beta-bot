@@ -56,6 +56,7 @@ class MyBot(discord.Client):
             self.synced = True
         if not self.views:
             self.add_view(bracket.registration_buttons_view())
+            self.add_view(match.voting_buttons_view())
             self.views = True
         # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
         # for guild in self.guilds:
@@ -191,8 +192,8 @@ tree = app_commands.CommandTree(bot_client)
 
 BracketGroup = app_commands.Group(name="bracket", description="Bracket commands", guild_ids=[133296587047829505], guild_only=True)
 @BracketGroup.command(description="[Privileged] Creates a test bracket.")
-async def test(interaction: Interaction):
-    await bracket.create_test_bracket(interaction)
+async def test(interaction: Interaction, num_entrants: int = 4):
+    await bracket.create_test_bracket(interaction, num_entrants)
 
 @BracketGroup.command(description="Creates a tournament bracket.")
 async def create(interaction: Interaction, title: str, time: str=""):
@@ -217,6 +218,10 @@ async def finalize(interaction: Interaction, title: str=""):
 @BracketGroup.command(description="Sends the results for a completed tournament bracket.")
 async def results(interaction: Interaction, title: str=""):
     await bracket.send_results(interaction, title)
+
+@BracketGroup.command(description="Manually reports the score for a tournament bracket match.")
+async def report(interaction: Interaction, challonge_id: int, winner: str):
+    await match.override_match_result(interaction, challonge_id, winner)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 
