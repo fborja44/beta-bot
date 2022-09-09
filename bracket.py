@@ -126,7 +126,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         
         # Send embed message
         embed = create_bracket_embed(new_bracket)
-        bracket_message: Message = await channel.send(embed=embed, view=join_button_view())
+        bracket_message: Message = await channel.send(embed=embed, view=registration_buttons_view())
 
         # Add bracket to database
         new_bracket['id'] = bracket_message.id
@@ -440,21 +440,24 @@ async def add_entrant(interaction: Interaction):
     # Fetch bracket
     db_bracket = find_bracket_by_id(db_guild, message.id)
     if not db_bracket or not db_bracket['open']:
+        await interaction.response.send_message(f"'**{bracket_title}**' is not open for registration.", ephemeral=True)
         return False 
     bracket_title = db_bracket['title']
-    entrant_names = [] # list of entrant names
+    entrant_ids = [] # list of entrant names
     for entrant in db_bracket['entrants']:
-        entrant_names.append(entrant['id'])
+        entrant_ids.append(entrant['id'])
     challonge_id = db_bracket['challonge']['id']
+    # Check if already in entrants list
+    if user.id in entrant_ids:
+        # printlog(f"User ['name'='{user.name}']' is already registered as an entrant in bracket ['title'='{bracket_title}'].")
+        await interaction.response.send_message(f"You have already joined '**{bracket_title}**'.", ephemeral=True)
+        return False
     # Add user to challonge bracket
     try:
         response = challonge.participants.create(challonge_id, user.name)
     except Exception as e:
         printlog(f"Failed to add user ['name'='{user.name}'] to challonge bracket. User may already exist.", e)
-        return False
-    # Check if already in entrants list
-    if user.name in entrant_names:
-        printlog(f"User ['name'='{user.name}']' is already registered as an entrant in bracket ['title'='{bracket_title}'].")
+        await interaction.response.send_message(f"Something went wrong when trying to join '**{bracket_title}**'.", ephemeral=True)
         return False
     # Add user to entrants list
     new_entrant = {
@@ -469,6 +472,7 @@ async def add_entrant(interaction: Interaction):
         db_bracket['entrants'].append(new_entrant)
     except:
         print(f"Failed to add user '{user.name}' to bracket ['title'='{bracket_title}'] entrants.")
+        await interaction.response.send_message(f"Something went wrong when trying to join '**{bracket_title}**'.", ephemeral=True)
         return False
     if updated_guild:
         print(f"Added entrant '{user.name}' ['id'='{user.id}'] to bracket ['title'='{bracket_title}'].")
@@ -476,7 +480,9 @@ async def add_entrant(interaction: Interaction):
         await edit_bracket_message(db_bracket, channel)
     else:
         print(f"Failed to add entrant '{user.name}' ['id'='{user.id}'] to bracket ['title'='{bracket_title}'].")
+        await interaction.response.send_message(f"Something went wrong when trying to join '**{bracket_title}**'.", ephemeral=True)
         return False
+    await interaction.response.send_message(f"Successfully joined '**{bracket_title}**'.", ephemeral=True)
     return True
 
 async def remove_entrant(interaction: Interaction):
@@ -502,12 +508,14 @@ async def remove_entrant(interaction: Interaction):
     # Check if already in entrants list
     if user.id not in entrant_names:
         printlog(f"User ['id'='{user.id}']' is not registered as an entrant in bracket ['title'='{bracket_title}'].")
+        await interaction.response.send_message(f"You are not registered for '**{bracket_title}**'.", ephemeral=True)
         return False
     db_entrant = list(filter(lambda entrant: entrant['id'] == user.id, db_bracket['entrants']))[0]
     try:
         challonge.participants.destroy(challonge_id, db_entrant['challonge_id'])
     except Exception as e:
         printlog(f"Failed to remove user ['name'='{db_entrant['name']}'] from challonge bracket. User may not exist.", e)
+        await interaction.response.send_message(f"Something went wrong when trying to leave '**{bracket_title}**'.", ephemeral=True)
         return False
     # Remove user from entrants list
     try:
@@ -515,6 +523,7 @@ async def remove_entrant(interaction: Interaction):
         db_bracket['entrants'] = list(filter(lambda entrant: entrant['id'] != user.id, db_bracket['entrants']))
     except:
         print(f"Failed to remove user '{db_entrant['name']}' from bracket ['title'='{bracket_title}'] entrants.")
+        await interaction.response.send_message(f"Something went wrong when trying to leave '**{bracket_title}**'.", ephemeral=True)
         return False
     if updated_guild:
         print(f"Removed entrant ['name'='{db_entrant['name']}']from bracket [id='{bracket_id}'].")
@@ -522,6 +531,10 @@ async def remove_entrant(interaction: Interaction):
         await edit_bracket_message(db_bracket, channel)
     else:
         print(f"Failed to remove entrant ['name'='{db_entrant['name']}']from bracket [id='{bracket_id}'].")
+        await interaction.response.send_message(f"Something went wrong when trying to leave '**{bracket_title}**'.", ephemeral=True)
+        return False
+    await interaction.response.send_message(f"Successfully removed from '**{bracket_title}**'.", ephemeral=True)
+    return True
 
 async def disqualify_entrant_main(interaction: Interaction, bracket_title: str, entrant_name: str):
     """
@@ -628,18 +641,21 @@ async def disqualify_entrant(channel: TextChannel, db_guild: dict, db_bracket: d
 ## BUTTON VIEWS ##
 ##################
 
-class join_button_view(discord.ui.View):
+pages = {}
+
+class registration_buttons_view(discord.ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Join Bracket", emoji="✅", style=discord.ButtonStyle.green, custom_id="join_bracket")
+    @discord.ui.button(label="Join Bracket", style=discord.ButtonStyle.green, custom_id="join_bracket")
     async def join(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
         print(interaction.message.id)
-        result = await add_entrant(interaction)
-        if result:
-            await interaction.response.send_message(f"Successfully entered bracket.", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"Something went wrong when trying to enter the bracket.", ephemeral=True)
+        await add_entrant(interaction)
+
+    @discord.ui.button(label="Leave Bracket", style=discord.ButtonStyle.red, custom_id="leave_bracket")
+    async def leave(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        print(interaction.message.id)
+        await remove_entrant(interaction)
 
 ######################
 ## HELPER FUNCTIONS ##

@@ -45,6 +45,7 @@ class MyBot(discord.Client):
     def __init__(self, *args, **kwargs):
         self.cmd_prefix="$" # unused
         self.synced = False # ensures commands are only synced once
+        self.views = False  # ensures views are reset when bot is restarted
         super().__init__(*args, **kwargs)
 
     async def on_ready(self): # Event called when bot is ready
@@ -53,7 +54,9 @@ class MyBot(discord.Client):
         if not self.synced: # Do NOT reset more than once per minute
             await tree.sync(guild=TEST_GUILD) # change to global when ready
             self.synced = True
-
+        if not self.views:
+            self.add_view(bracket.registration_buttons_view())
+            self.views = True
         # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
         # for guild in self.guilds:
         #     await _guild.find_update_add_guild(self, db, guild)
