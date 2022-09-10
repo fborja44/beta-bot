@@ -76,7 +76,7 @@ def find_most_recent_bracket(db_guild: dict, completed: bool):
 
 async def create_bracket(interaction: Interaction, bracket_title: str, time: str="", single_elim: bool = False, max_entrants: int = 24, respond: bool = True):
     """
-    Creates a new bracket and adds it to the guild in the database.
+    Creates a new bracket and adds it to the guild.
     """
     guild: Guild = interaction.guild
     channel: TextChannel = interaction.channel
@@ -88,11 +88,14 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
     # usage = 'Usage: `$bracket create <name> [time]`'
 
     # Parse time; Default is 1 hour from current time
-    parsed_time = parse_time(time)
+    parsed_time = parse_time(time) # TODO: needs testing for bad input
 
     # Max character length == 60
+    if len(bracket_title.strip()) == 0:
+        if respond: await interaction.followup.send(f"Bracket title cannot be empty.")
+        return None, None, None
     if len(bracket_title.strip()) > 60:
-        if respond: await interaction.followup.send(f"Bracket name can be no longer than 60 characters.")
+        if respond: await interaction.followup.send(f"Bracket title can be no longer than 60 characters.")
         return None, None, None
     # Max entrants limits
     if max_entrants is not None and (max_entrants < 4 or max_entrants > MAX_ENTRANTS):
@@ -101,15 +104,16 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
     # Check if bracket already exists
     db_bracket = find_bracket(db_guild, bracket_title)
     if db_bracket:
-        if respond: await interaction.followup.send(f"Bracket with name '{bracket_title}' already exists.")
+        if respond: await interaction.followup.send(f"Bracket with title '{bracket_title}' already exists.")
         return None, None, None
     try:
         # Create challonge bracket
         bracket_challonge = challonge.tournaments.create(
             name=bracket_title, 
             url=None, 
-            tournament_type="single elimination" if single_elim else "double elimination", 
-            start_at=parsed_time, 
+            tournament_type="single elimination" if single_elim else "double elimination",
+            start_at=parsed_time,
+            signup_cap=max_entrants,
             show_rounds=True, 
             private=True, 
             quick_advance=True, 
@@ -175,7 +179,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
 
 async def delete_bracket(interaction: Interaction, bracket_title: str, respond: bool=True):
     """
-    Deletes the specified bracket from the database (if it exists).
+    Deletes the specified bracket (if it exists).
     """
     channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
@@ -221,10 +225,9 @@ async def delete_bracket(interaction: Interaction, bracket_title: str, respond: 
     if respond: await interaction.response.send_message(f"Successfully deleted bracket '***{bracket_title}***'.")
     return retval
 
-async def update_bracket(interaction: Interaction):
+async def update_bracket(interaction: Interaction, bracket_title: str , new_bracket_title: str | None=None, time: str | None=None, single_elim: bool | None=None, max_entrants: int | None=None):
     """
-    Updates the specified bracket in the database (if it exists).
-    TODO
+    Updates the specified bracket (if it exists).
     """
     channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
@@ -243,6 +246,51 @@ async def update_bracket(interaction: Interaction):
     if db_bracket['channel_id'] != channel.id:
         await interaction.response.send_message(f"Must be in the channel that '***{bracket_title}***' was created in: <#{db_bracket['channel_id']}>.", ephemeral=True)
         return False
+    # Only allow updating if the bracket has not been started or completed
+    if not db_bracket['open'] or db_bracket['completed']:
+        await interaction.response.send_message(f"You may only update brackets in the registration phase.", ephemeral=True)
+        return False
+    # Check if updating info
+    if not (new_bracket_title is not None or time is not None or single_elim is not None or max_entrants is not None):
+        await interaction.response.send_message(f"Must include at least one field to update.", ephemeral=True)
+        return False
+    # Updating bracket_title
+    if new_bracket_title is not None:
+        if len(new_bracket_title.strip()) == 0:
+            await interaction.response.send_message(f"Bracket title cannot be empty.")
+            return None, None, None
+        if len(new_bracket_title.strip()) > 60:
+            await interaction.response.send_message(f"Bracket title can be no longer than 60 characters.")
+            return None, None, None
+        db_bracket['title'] = new_bracket_title
+    # Updating time
+    if time is not None:
+        db_bracket['starttime'] = parse_time(time)
+    # Updating type
+    if single_elim is not None:
+        db_bracket['tournament_type'] = "single elimination" if single_elim else "double elimination"
+    # Updating max_entrants
+    if max_entrants is not None:
+        if (max_entrants < 4 or max_entrants > MAX_ENTRANTS):
+            await interaction.response.send_message(f"`max_entrants` must be between 4 and {MAX_ENTRANTS}.")
+            return False
+        db_bracket['max_entrants'] = max_entrants
+    # Update the bracket on challonge
+    challonge.tournaments.update(db_bracket['challonge']['id'], 
+        name=db_bracket['title'], 
+        tournament_type=db_bracket['tournament_type'],
+        start_at=db_bracket['starttime'], 
+        signup_cap=max_entrants,
+    )
+    # Update the bracket in database
+    await set_bracket(guild.id, bracket_title, db_bracket)
+    # Update bracket embed
+    bracket_message: Message = await channel.fetch_message(db_bracket['id'])
+    author: Member = await guild.fetch_member(db_bracket['author']['id']) or interaction.user
+    new_bracket_embed = create_bracket_embed(db_bracket, author)
+    await bracket_message.edit(embed=new_bracket_embed)
+    await interaction.response.send_message(f"Successfully updated bracket.")
+    return True
 
 async def start_bracket(interaction: Interaction, bracket_title: str):
     """

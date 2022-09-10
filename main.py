@@ -92,6 +92,11 @@ async def create(interaction: Interaction, bracket_title: str, time: str="", sin
 async def delete(interaction: Interaction, bracket_title: str=""):
     await bracket.delete_bracket(interaction, bracket_title)
 
+@BracketGroup.command(description="Updates a tournament bracket.")
+async def update(interaction: Interaction, bracket_title: str, new_bracket_title: str | None = None, time: str | None = None, 
+                    single_elim: bool | None = None, max_entrants: int | None = None):
+    await bracket.update_bracket(interaction, bracket_title, new_bracket_title, time, single_elim, max_entrants)
+
 @BracketGroup.command(description="Starts a tournament bracket.")
 async def start(interaction: Interaction, bracket_title: str=""):
     await bracket.start_bracket(interaction, bracket_title)
