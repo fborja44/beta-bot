@@ -1,5 +1,5 @@
 from cgi import print_exception
-from common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL
+from common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
 from datetime import datetime, timedelta, date
 from discord import Client, Embed, Guild, Interaction, Message, Member, RawReactionActionEvent, TextChannel
 from dotenv import load_dotenv
@@ -74,7 +74,7 @@ def find_most_recent_bracket(db_guild: dict, completed: bool):
         print(e)
         return None
 
-async def create_bracket(interaction: Interaction, bracket_title: str, time: str="", respond: bool = False):
+async def create_bracket(interaction: Interaction, bracket_title: str, time: str="", single_elim: bool = False, max_entrants: int = 24, respond: bool = True):
     """
     Creates a new bracket and adds it to the guild in the database.
     """
@@ -82,6 +82,8 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
     channel: TextChannel = interaction.channel
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
+    # Defer response
+    if respond: await interaction.response.defer(ephemeral=True)
     # Check args
     # usage = 'Usage: `$bracket create <name> [time]`'
 
@@ -90,22 +92,35 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
 
     # Max character length == 60
     if len(bracket_title.strip()) > 60:
-        if respond: await interaction.response.send_message(f"Bracket name can be no longer than 60 characters.")
+        if respond: await interaction.followup.send(f"Bracket name can be no longer than 60 characters.")
         return None, None, None
+    # Max entrants limits
+    if max_entrants is not None and (max_entrants < 4 or max_entrants > MAX_ENTRANTS):
+        if respond: await interaction.followup.send(f"`max_entrants` must be between 4 and {MAX_ENTRANTS}.")
+        return False
     # Check if bracket already exists
     db_bracket = find_bracket(db_guild, bracket_title)
     if db_bracket:
-        if respond: interaction.response.send_message(f"Bracket with name '{bracket_title}' already exists.")
+        if respond: await interaction.followup.send(f"Bracket with name '{bracket_title}' already exists.")
         return None, None, None
     try:
         # Create challonge bracket
-        bracket_challonge = challonge.tournaments.create(name=bracket_title, url=None, tournament_type='double elimination', 
-            start_at=parsed_time, show_rounds=True, private=True, quick_advance=True, open_signup=False)
+        bracket_challonge = challonge.tournaments.create(
+            name=bracket_title, 
+            url=None, 
+            tournament_type="single elimination" if single_elim else "double elimination", 
+            start_at=parsed_time, 
+            show_rounds=True, 
+            private=True, 
+            quick_advance=True, 
+            open_signup=False
+        )
 
         new_bracket = {
             'id': None, # Initialized later
             'channel_id': channel.id,
             'title': bracket_title, 
+            'tournament_type': bracket_challonge['tournament_type'],
             'jump_url': None, # Initialized later
             'result_url': None,
             'author': {
@@ -118,6 +133,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
                 'url': bracket_challonge['full_challonge_url']
                  },
             'entrants': [], 
+            'max_entrants': max_entrants,
             'matches': [],
             'created_at': datetime.now(),
             'starttime': parsed_time, 
@@ -128,7 +144,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         }
         
         # Send embed message
-        embed = create_bracket_embed(new_bracket)
+        embed = create_bracket_embed(new_bracket, interaction.user)
         bracket_message: Message = await channel.send(embed=embed, view=registration_buttons_view())
 
         # Add bracket to database
@@ -136,11 +152,11 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         new_bracket['jump_url'] = bracket_message.jump_url
         result = await _guild.push_to_guild(guild, BRACKETS, new_bracket)
         print(f"User '{user.name}' [id={user.id}] created new bracket '{bracket_title}'.")
-        if respond: await interaction.response.send_message(f"Successfully created bracket '***{bracket_title}***'.", ephemeral=True)
+        if respond: await interaction.followup.send(f"Successfully created bracket '***{bracket_title}***'.")
         return (new_bracket, bracket_message, bracket_challonge)
     except Exception as e:
-        await printlog("Something went wrong when creating the bracket.", e)
-        if respond: await interaction.response.send_message(f"Something went wrong when creating bracket '***{bracket_title}***'.", ephemeral=True)
+        printlog("Something went wrong when creating the bracket.", e)
+        if respond: await interaction.followup.send(f"Something went wrong when creating bracket '***{bracket_title}***'.")
         # Delete challonge tournament
         try:
             challonge.tournaments.destroy(bracket_challonge['id'])
@@ -284,7 +300,7 @@ async def start_bracket(interaction: Interaction, bracket_title: str):
     print(f"User ['name'='{user.name}'] started bracket ['title'='{bracket_title}'].")
     # Send start message
     # bracket_message = await channel.fetch_message(db_bracket['id'])
-    await interaction.response.send_message(content=f"***{bracket_title}*** has now started!") # Reply to original bracket message
+    await interaction.response.send_message(content=f"'***{bracket_title}***' has now started!") # Reply to original bracket message
     # Get each initial open matches
     matches = list(filter(lambda match: (match['state'] == 'open'), challonge_matches))
     for match in matches:
@@ -336,8 +352,9 @@ async def reset_bracket(interaction: Interaction, bracket_title: str):
     print(f"User ['name'='{user.name}'] reset bracket ['title'='{bracket_title}'].")
     # Reset bracket message
     bracket_message = await channel.fetch_message(bracket_message_id)
-    new_bracket_embed = create_bracket_embed(db_bracket)
-    await bracket_message.edit(embed=new_bracket_embed)
+    author: Member = await guild.fetch_member(db_bracket['author']['id']) or interaction.user
+    new_bracket_embed = create_bracket_embed(db_bracket, author)
+    await bracket_message.edit(embed=new_bracket_embed, view=registration_buttons_view())
     await interaction.response.send_message(f"Successfully reset bracket '***{bracket_title}***'.")
     return True
 
@@ -383,7 +400,7 @@ async def finalize_bracket(interaction: Interaction, bracket_title: str):
     # Create results message
     db_bracket['completed'] = completed_time # update completed time
     embed = create_results_embed(db_bracket, final_bracket['participants'])
-    result_message = await interaction.followup.send(content=f"***{bracket_title}*** has been finalized. Here are the results!", embed=embed) # Reply to original bracket message
+    result_message = await interaction.followup.send(content=f"'***{bracket_title}***' has been finalized. Here are the results!", embed=embed) # Reply to original bracket message
     # Set bracket to completed in database
     try: 
         db_bracket.update({'result_url': result_message.jump_url}) # update result jump url
@@ -410,7 +427,7 @@ async def send_results(interaction: Interaction, bracket_title: str):
         return False
     # Check if bracket is completed
     if not db_bracket['completed']:
-        await interaction.response.send_message(f"***{bracket_title}*** has not yet been finalized.", ephemeral=True)
+        await interaction.response.send_message(f"'***{bracket_title}***' has not yet been finalized.", ephemeral=True)
         return False
     # Retrive challonge bracket information
     try: 
@@ -459,6 +476,10 @@ async def add_entrant(interaction: Interaction, db_bracket: dict=None, member: M
     if user.id in entrant_ids:
         # printlog(f"User ['name'='{user.name}']' is already registered as an entrant in bracket ['title'='{bracket_title}'].")
         if respond: await interaction.response.send_message(f"You have already joined '***{bracket_title}***'.", ephemeral=True)
+        return False
+    # Check if bracket is at capacity
+    if db_bracket['max_entrants'] and db_bracket['max_entrants'] == len(db_bracket['entrants']):
+        if respond: await interaction.response.send_message(f"Unable to join '***{bracket_title}***'. Tournament has reached maximum entrants.")
         return False
     # Add user to challonge bracket
     try:
@@ -653,6 +674,13 @@ class registration_buttons_view(discord.ui.View):
     async def leave(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
         await remove_entrant(interaction)
 
+    @discord.ui.button(label="Start Bracket", style=discord.ButtonStyle.blurple, custom_id="start_bracket")
+    async def start(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        db_guild = await _guild.find_guild(interaction.guild.id)
+        db_bracket = find_bracket_by_id(db_guild, interaction.message.id)
+        bracket_title = db_bracket['title']
+        await start_bracket(interaction, bracket_title)
+
 ######################
 ## HELPER FUNCTIONS ##
 ######################
@@ -765,11 +793,10 @@ def parse_time(string: str):
 ## MESSAGE FUNCTIONS ##
 #######################
 
-def create_bracket_embed(db_bracket: dict):
+def create_bracket_embed(db_bracket: dict, author: Member):
     """
     Creates embed object to include in bracket message.
     """
-    author_name = db_bracket['author']['username']
     bracket_title = db_bracket['title']
     challonge_url = db_bracket['challonge']['url']
     time = db_bracket['starttime']
@@ -783,13 +810,18 @@ def create_bracket_embed(db_bracket: dict):
         status = "Started 🟩"
     embed = Embed(title=f'🥊  {bracket_title}', description=f"Status: {status}", color=0x6A0DAD)
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    embed.add_field(name='Tournament Type', value=db_bracket['tournament_type'].title(), inline=False)
     time_str = time.strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
     embed.add_field(name='Starting At', value=time_str, inline=False)
     # Entrants list
-    embed.add_field(name='Entrants (0)', value="> *None*", inline=False)
+    if db_bracket['max_entrants']:
+        embed.add_field(name='Entrants (0)', value="> *None*", inline=False)
+    else:
+        max_entrants = db_bracket['max_entrants']
+        embed.add_field(name=f'Entrants (0/{max_entrants})', value="> *None*", inline=False)
     embed = update_embed_entrants(db_bracket, embed)
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
-    embed.set_footer(text=f'Created by {author_name}.', icon_url=db_bracket['author']['avatar_url'])
+    embed.set_footer(text=f'Created by {author.display_name} | {author.name}#{author.discriminator}.', icon_url=db_bracket['author']['avatar_url'])
     return embed
 
 async def edit_bracket_message(db_bracket: dict, channel: TextChannel):
@@ -821,8 +853,8 @@ async def edit_bracket_message(db_bracket: dict, channel: TextChannel):
             embed = image_embed
     if db_bracket['completed']:
         time_str = db_bracket['completed'].strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
-        embed.set_footer(text=f'Completed: {time_str}')
-        embed.set_author(name="Click Here to See Results", url=db_bracket['result_url'], icon_url=ICON)
+        embed.add_field(name=f'Completed At', value=f"{time_str}", inline=False)
+        embed.set_author(name="Click Here For Results", url=db_bracket['result_url'], icon_url=ICON)
     await bracket_message.edit(embed=embed)
 
 def update_embed_entrants(db_bracket: dict, embed: Embed):
@@ -838,7 +870,9 @@ def update_embed_entrants(db_bracket: dict, embed: Embed):
             entrants_content += f"> <@{entrant['id']}>\n"
     else:
         entrants_content = '> *None*'
-    embed.set_field_at(1, name=f'Entrants ({len(entrants)})', value=entrants_content, inline=False)
+    max_entrants = db_bracket['max_entrants']
+    name = f'Entrants ({len(entrants)}/{max_entrants})' if max_entrants else f'Entrants ({len(entrants)})'
+    embed.set_field_at(2, name=name, value=entrants_content, inline=False)
     return embed
 
 def create_bracket_image(db_bracket: dict, embed: Embed):
@@ -919,7 +953,7 @@ async def create_test_bracket(interaction: Interaction, num_entrants: int = 4):
     db_guild = await _guild.find_add_guild(guild)
     # Only allow guild admins to create a test bracket
     if not user.guild_permissions.administrator:
-        return await user.channel.send(f"Only admins can create a test bracket.")
+        return await interaction.followup.send(f"Only admins can create a test bracket.")
 
     # Delete previous test bracket if it exists
     try:

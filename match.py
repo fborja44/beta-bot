@@ -207,7 +207,10 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
             else:
                 dispute_embed = _challenge.edit_challenge_embed_dispute(match_embed)
             await match_message.edit(embed=dispute_embed)
-    await interaction.followup.send(f"Successfully voted for {vote}.", ephemeral=True)
+    if vote:
+        await interaction.followup.send(f"Successfully voted for {vote}.", ephemeral=True)
+    else:
+        await interaction.followup.send(f"Successfully removed vote.", ephemeral=True)
     return True
 
     # Otherwise, give other player 2 minutes to vote
@@ -503,16 +506,19 @@ def get_round_name(db_bracket: dict, match_id: int, round: int):
         # Winners Bracket
         match num_rounds - round:
             case 0:
-                try:
-                    matches = challonge.matches.index(db_bracket['challonge']['id'])
-                    matches.sort(reverse=True, key=(lambda match: match['id']))
-                    print(matches[0]['id'])
-                    if match_id != matches[0]['id']:
-                        return "Grand Finals Set 1"
+                if db_bracket['tournament_type'] == "double elimination":
+                    try:
+                        matches = challonge.matches.index(db_bracket['challonge']['id'])
+                        matches.sort(reverse=True, key=(lambda match: match['id']))
+                        print(matches[0]['id'])
+                        if match_id != matches[0]['id']:
+                            return "Grand Finals Set 1"
+                        else:
+                            return "Grand Finals Set 2"
+                    except:
+                        return "Grand Finals"
                     else:
-                        return "Grand Finals Set 2"
-                except:
-                    return "Grand Finals"
+                        return "Grand Finals"
             case 1:
                 return "Winners Finals"
             case 2:

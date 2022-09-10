@@ -1,6 +1,6 @@
 from discord import app_commands, Guild, Member, Message, Interaction
 from colorama import Fore, Back, Style
-from common import CHALLONGE_USER, CHALLONGE_KEY, MONGO_ADDR, TOKEN
+from common import CHALLONGE_USER, CHALLONGE_KEY, MONGO_ADDR, MAX_ENTRANTS, TOKEN
 from dotenv import load_dotenv
 from pprint import pprint
 from pydoc import describe
@@ -84,9 +84,9 @@ BracketGroup = app_commands.Group(name="bracket", description="Tournament bracke
 async def test(interaction: Interaction, num_entrants: int = 4):
     await bracket.create_test_bracket(interaction, num_entrants)
 
-@BracketGroup.command(description="Creates a tournament bracket.")
-async def create(interaction: Interaction, bracket_title: str, time: str=""):
-    await bracket.create_bracket(interaction, bracket_title, time)
+@BracketGroup.command(description="Creates a tournament bracket. Default: double elimination")
+async def create(interaction: Interaction, bracket_title: str, time: str="", single_elim: bool = False, max_entrants: int = MAX_ENTRANTS):
+    await bracket.create_bracket(interaction, bracket_title, time, single_elim, max_entrants)
 
 @BracketGroup.command(description="Deletes a tournament bracket.")
 async def delete(interaction: Interaction, bracket_title: str=""):
