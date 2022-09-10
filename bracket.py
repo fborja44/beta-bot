@@ -400,13 +400,11 @@ async def send_results(interaction: Interaction, bracket_title: str):
     """
     Sends the results message of a bracket that has been completed.
     """
-    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     db_guild = await _guild.find_guild(guild.id)
     # Fetch bracket
     # usage = 'Usage: `$bracket results <title>`'
     db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title, completed=True)
-    bracket_message_id = db_bracket['id']
     challonge_id = db_bracket['challonge']['id']
     if not db_bracket:
         return False
@@ -421,9 +419,8 @@ async def send_results(interaction: Interaction, bracket_title: str):
         print(f"Could not find bracket on challonge ['challonge_id'='{challonge_id}'].")
         return False
     # Create results message
-    bracket_message = await channel.fetch_message(bracket_message_id)
     embed = create_results_embed(db_bracket, final_bracket['participants'])
-    await interaction.response.send_message(reference=bracket_message, embed=embed) # Reply to original bracket message
+    await interaction.response.send_message(embed=embed) # Reply to original bracket message
     return True
 
 #######################
@@ -792,7 +789,7 @@ def create_bracket_embed(db_bracket: dict):
     embed.add_field(name='Entrants (0)', value="> *None*", inline=False)
     embed = update_embed_entrants(db_bracket, embed)
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
-    embed.set_footer(text=f'Created by {author_name}', icon_url=db_bracket['author']['avatar_url'])
+    embed.set_footer(text=f'Created by {author_name}.', icon_url=db_bracket['author']['avatar_url'])
     return embed
 
 async def edit_bracket_message(db_bracket: dict, channel: TextChannel):

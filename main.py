@@ -58,6 +58,7 @@ class MyBot(discord.Client):
         if not self.views:
             self.add_view(bracket.registration_buttons_view())
             self.add_view(match.voting_buttons_view())
+            self.add_view(challenge.accept_view())
             self.views = True
         # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
         # for guild in self.guilds:
@@ -191,7 +192,8 @@ intents.members = True
 bot_client = MyBot(intents=intents)
 tree = app_commands.CommandTree(bot_client)
 
-BracketGroup = app_commands.Group(name="bracket", description="Bracket commands", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+# Bracket Commands
+BracketGroup = app_commands.Group(name="bracket", description="Tournament bracket commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
 @BracketGroup.command(description="[Privileged] Creates a test bracket.")
 async def test(interaction: Interaction, num_entrants: int = 4):
     await bracket.create_test_bracket(interaction, num_entrants)
@@ -227,6 +229,20 @@ async def report(interaction: Interaction, match_challonge_id: int, winner: str)
 @BracketGroup.command(description="Disqualifies or removes an entrant from a tournament bracket.")
 async def disqualify(interaction: Interaction, entrant_name: str, bracket_title: str=""):
     await bracket.disqualify_entrant_main(interaction, entrant_name, bracket_title)
+
+# Challenge Commands
+BracketGroup = app_commands.Group(name="challenge", description="Challenge commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+@BracketGroup.command(description="Creates a challenge.")
+async def create(interaction: Interaction, best_of: int = 3, player_mention: str = ""):
+    await challenge.create_challenge(bot_client, interaction, best_of, player_mention)
+
+@BracketGroup.command(description="Cancels a challenge that has not yet been completed.")
+async def cancel(interaction: Interaction, challenge_id: int = None):
+    await challenge.cancel_challenge(interaction, challenge_id)
+
+@BracketGroup.command(description="[Privileged] Deletes a challenge.")
+async def delete(interaction: Interaction, challenge_id: int = None):
+    await challenge.cancel_challenge(interaction, challenge_id, delete=True)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 tree.add_command(BracketGroup, guild=discord.Object(id=713190806688628786))

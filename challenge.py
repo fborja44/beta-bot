@@ -1,6 +1,6 @@
 from common import CHALLENGES, GUILDS, ICON
 from datetime import datetime, timedelta, date
-from discord import Client, Embed, Guild, Member, Message, RawReactionActionEvent, Reaction, TextChannel, User
+from discord import Button, Client, Embed, Guild, Interaction, Member, Message, RawReactionActionEvent, Reaction, TextChannel, User
 from gridfs import Database
 from logger import printlog
 from pprint import pprint
@@ -40,72 +40,38 @@ def find_active_challenge_by_user(db_guild: dict, user_id: int):
     except:
         return None
 
-async def create_challenge_queue(message: Message, db: Database, argv: list, argc: int):
-    """
-    Creates a new challenge match and waits for a challenger.
-    """
-    guild: Guild = message.guild
-    # Parse arguments; default type = Bo3
-    usage = 'Usage: `$challenge create [type]`\nex. $challenge create bo3'
-    if argc < 2:
-        await message.channel.send(usage)
-        return None
-    # Get type
-    best_of = 3
-    if argc >= 3:
-        text_match = type_match.search(argv[2])
-        if text_match:
-            best_of = int(text_match.group()[2:])
-            if best_of % 2 != 1: # must be odd
-                await message.channel.send("There must be an odd number of rounds.")
-                return None
-        else:
-            await message.channel.send(f"Invalid input for type.\n{usage}")
-
-    # Call main function
-    return await create_challenge(message, db, guild, player1=message.author, player2=None, best_of=best_of, open=True)
-
-async def create_challenge_direct(message: Message, db: Database, argv: list, argc: int):
+async def create_challenge(client: Client, interaction: Interaction, best_of: int, player_mention: str):
     """
     Creates a new challenge match between two players.
+    If player_mention is None, waits for a challenger.
     """
-    guild: Guild = message.guild
-    # Parse arguments; default type = Bo3
-    usage = f'Usage: `$challenge @<user> [type]`\nex. $challenge <@{self.user.id}> bo3'
-    if argc < 2:
-        await message.channel.send(usage)
-        return None
-    # Check for metioned user
-    if len(message.mentions) == 0:
-        await message.channel.send(f"Missing user mention.\n{usage}")
-        return False
-    elif len(message.mentions) > 1:
-        await message.channel.send(f"Too many user mentions.\n{usage}")
-        return False
-    matched_id = id_match.search(argv[1])
-    if matched_id:
-        player2 = message.mentions[0]
-    else:
-        await message.channel.send(f"Invalid input for user.\n{usage}")
-        return False
-    # Get type
-    best_of = 3
-    if argc >= 3:
-        text_match = type_match.search(argv[2])
-        if text_match:
-            best_of = int(text_match.group()[2:])
-            if best_of % 2 != 1: # must be odd
-                await message.channel.send("There must be an odd number of rounds.")
-                return None
-        else:
-            await message.channel.send(f"Invalid input for type.\n{usage}")
-    return await create_challenge(message, db, guild, player1=message.author, player2=player2, best_of=best_of, open=False)
-
-async def create_challenge(message: Message, db: Database, guild: Guild, player1: Member, player2: Member | None, best_of: int, open: bool):
-    """
-    Creates a new challenge match and adds it to the database.
-    """
+    guild: Guild = interaction.guild
+    player1: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
     # TODO: Check if already has active challenge
+    active_challenge = find_active_challenge_by_user(db_guild, player1.id)
+    if active_challenge:
+        await interaction.response.send_message("You already have an active challenge.")
+        return False
+
+    # Parse arguments; default type = Bo3
+    # usage = 'Usage: `$challenge create [type]`\nex. $challenge create 3'
+    # Check number of rounds
+    if best_of % 2 != 1: # must be odd
+        await interaction.response.send_message("There must be an odd number of rounds.", )
+        return False
+
+    usage = f'Usage: `/challenge [best_of] [@<user>] `\nex. /challenge 3 <@{client.user.id}>'
+    # Check for metioned user
+    if len(player_mention.strip()) > 0:
+        matched_id = id_match.search(player_mention)
+        if matched_id:
+            player2 = player_mention[2:-1]
+        else:
+            await interaction.response.send_message(f"Invalid input for user.\n{usage}", ephemeral=True)
+            return False
+    else:
+        player2 = None
 
     player1_id = player1.id
     player1_name = player1.name
@@ -114,11 +80,12 @@ async def create_challenge(message: Message, db: Database, guild: Guild, player1
 
     new_challenge = {
         "id": None,
-        "channel_id": message.channel.id,
+        "channel_id": interaction.channel.id,
         "player1": {
             "id": player1_id,
             "name": player1_name,
-            "vote": None
+            "vote": None,
+            "avatar_url": player1.display_avatar.url
         },
         "player2": {
             "id": player2_id,
@@ -133,132 +100,134 @@ async def create_challenge(message: Message, db: Database, guild: Guild, player1
 
     # Send embed message
     embed = create_challenge_embed(new_challenge)
-    challenge_message: Message = await message.channel.send(embed=embed)
-    # Add boxing glove reaction to message
-    await challenge_message.add_reaction('🥊')
+    challenge_message: Message = await interaction.response.send_message(embed=embed, view=accept_view())
 
     # Add challenge to database
     new_challenge['id'] = challenge_message.id
-    result = await _guild.push_to_guild(db, guild, CHALLENGES, new_challenge)
-    print(f"User '{message.author.name}' [id={message.author.id}] created new challenge ['id'={new_challenge['id']}].")
+    await _guild.push_to_guild(guild, CHALLENGES, new_challenge)
+    print(f"User '{player1.name}' [id={player1.id}] created new challenge ['id'={new_challenge['id']}].")
     return new_challenge
 
-async def cancel_challenge(message: Message, db: Database, argv: list, argc: int, delete: bool=False):
+async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: bool=False):
     """
     Cancels an open challenge match.
     If delete option is True, deletes challenge regardless of status. Only available to guild admins or bracket managers.
     """
-    guild: Guild = message.guild
-    db_guild = await _guild.find_guild(db, guild.id)
+    channel: TextChannel = interaction.channel
+    guild: Guild = interaction.guild
+    user: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
     # Fetch challenge
     usage = 'Usage: `$challenge cancel [name]` or `$challenge delete [name]` (admins only)'
-    db_challenge, challenge_id = await parse_args(message, db, db_guild, usage, argv, argc)
+    db_challenge, challenge_id = await retrieve_valid_challenge(interaction, db_guild, challenge_id)
     if not db_challenge:
         return False
     # Cancel or Delete
     if not delete:
-        if message.author.id != db_challenge['player1']['id'] or not message.author.guild_permissions.administrator:
-            await message.channel.send(f"Only the author or server admins can cancel challenges.")
+        if user.id != db_challenge['player1']['id'] or not user.guild_permissions.administrator:
+            await interaction.response.send_message(f"Only the author or server admins can cancel challenges.", ephemeral=True)
             return False
     else:
-        if not message.author.guild_permissions.administrator:
-            await message.channel.send(f"Only the author or server admins can cancel challenges.")
+        if not user.guild_permissions.administrator:
+            await interaction.response.send_message(f"Only server admins can delete completed challenges.", ephemeral=True)
             return False
     # Check if in channel challenge was created in
-    if db_challenge['channel_id'] != message.channel.id:
-        await message.channel.send(f"Must be in the channel that the challenge was created in: <#{db_challenge['channel_id']}>")
+    if db_challenge['channel_id'] != channel.id:
+        await interaction.response.send_message(f"Must be in the channel that the challenge was created in: <#{db_challenge['channel_id']}>", ephemeral=True)
         return False
     # Only cancel if not open
     if not delete:
         if not db_challenge['open'] or db_challenge['completed']:
-            await message.channel.send(f"You may not cancel challenges that are in progress or completed.")
+            await interaction.response.send_message(f"You may not cancel challenges that are in progress or completed.", ephemeral=True)
             return False
 
     # Delete challenge message
-    challenge_message: Message = await message.channel.fetch_message(message.reference.message_id)
+    challenge_message: Message = await channel.fetch_message(challenge_id)
     await challenge_message.delete()
     # Delete challenge document
     try:
-        result = await _guild.pull_from_guild(db, guild, CHALLENGES, db_challenge)
+        result = await _guild.pull_from_guild(guild, CHALLENGES, db_challenge)
     except:
         print(f"Failed to delete challenge ['id'={challenge_id}].")
         return False
     if result:
-        print(f"User '{message.author.name}' [id={message.author.id}] cancelled challenge ['id'='{challenge_id}'].")
-        await message.channel.send("Challenge successfully cancelled.")
+        print(f"User '{user.name}' [id={user.id}] cancelled/deleted challenge ['id'='{challenge_id}'].")
+        await interaction.response.send_message("Challenge has been successfully cancelled.")
         return True
     else:
         return False
 
     # TODO: If deleting a completed challenge, update leaderboard
 
-async def accept_challenge(payload: RawReactionActionEvent, db: Database):
+async def accept_challenge(interaction: Interaction, button: Button):
     """
     Accepts an open challenge.
     """
-    channel: TextChannel = await self.fetch_channel(payload.channel_id)
-    guild: Guild = await self.fetch_guild(payload.guild_id)
-    db_guild = await _guild.find_guild(db, guild.id)
-    challenge_message: Message = await channel.fetch_message(payload.message_id)
+    channel: TextChannel = interaction.channel
+    guild: Guild = interaction.guild
+    message: Message = interaction.message
+    message_id = message.id
+    user: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
+    challenge_message: Message = await channel.fetch_message(message_id)
 
     # Check if reaction was on a challenge message
-    db_challenge = find_challenge(db_guild, payload.message_id)
+    db_challenge = find_challenge(db_guild, message_id)
     if not db_challenge:
         return False
     # Check if user created the challenge
-    if db_challenge['player1']['id'] == payload.member.id:
-        # Remove reaction
-        member: Member = guild.fetch_member(payload.member.id)
-        await challenge_message.remove_reaction(payload.emoji, member)
+    if db_challenge['player1']['id'] == user.id:
+        await interaction.response.send_message("You cannot accept your own challenge.", ephemeral=True)
         return False
     # Check if completed
     if db_challenge['completed']:
+        await interaction.response.send_message("This challenge has already been completed.", ephemeral=True)
         return False
     # Check if direct challenge
     if db_challenge['player2']['id'] is not None: # Direct challenge
         # Check if member reacting is the person being challenged
-        if db_challenge['player2']['id'] != payload.member.id:
+        if db_challenge['player2']['id'] != user.id:
+            await interaction.response.send_message("You are not the user being challenged.", ephemeral=True)
             return False
     else: # Queuing for challenge
         # Check if open
         if not db_challenge['open']:
+            await interaction.response.send_message("This challenge is currently not open.", ephemeral=True)
             return False
 
         # Add user to challenge
         db_challenge['player2'] = {
-            "id": payload.member.id,
-            "name": payload.member.name,
+            "id": user.id,
+            "name": user.name,
             "vote": None
         }
     
     # Set to closed
     db_challenge['open'] = False
     # Update challenge in databse
-    result = await set_challenge(db, guild.id, challenge_message.id, db_challenge)
+    result = await set_challenge(guild.id, challenge_message.id, db_challenge)
     if not result:
-        print(f"Failed to accept challenge ['id'='{payload.message_id}'].")
+        print(f"Failed to accept challenge ['id'='{message_id}'].")
         return False
-    print(f"User ['name'='{payload.member.name}'] accepted challenge ['id'='{db_challenge['id']}'] by '{db_challenge['player1']['name']}'.")
-    # Update message embed
+    print(f"User ['name'='{user.name}'] accepted challenge ['id'='{db_challenge['id']}'] by '{db_challenge['player1']['name']}'.")
+    # Update message embed and buttons
     updated_embed = edit_challenge_embed_start(db_challenge, challenge_message.embeds[0])
-    await challenge_message.edit(embed=updated_embed)
-    # Remove 🥊 reactions and add 1️⃣ and 2️⃣
-    await challenge_message.clear_reactions()
-    await challenge_message.add_reaction('1️⃣')
-    await challenge_message.add_reaction('2️⃣')
+    await challenge_message.edit(embed=updated_embed, view=voting_buttons_view())
     return True
 
-async def vote_challenge_reaction(payload: RawReactionActionEvent, db: Database):
+async def vote_challenge_button(interaction: Interaction, button: Button):
     """
     Reports the winner for a challenge using reactions.
     """
-    channel: TextChannel = await self.fetch_channel(payload.channel_id)
-    guild: Guild = await self.fetch_guild(payload.guild_id)
-    db_guild = await _guild.find_guild(db, guild.id)
-    challenge_message: Message = await channel.fetch_message(payload.message_id)
+    channel: TextChannel = interaction.channel
+    guild: Guild = interaction.guild
+    message: Message = interaction.message
+    message_id = message.id
+    db_guild = await _guild.find_guild(guild.id)
+    challenge_message: Message = await channel.fetch_message(message_id)
 
     # Check if reaction was on a challenge message
-    db_challenge = find_challenge(db_guild, payload.message_id)
+    db_challenge = find_challenge(db_guild, message_id)
     if not db_challenge:
         return False
     # Check if completed
@@ -266,9 +235,9 @@ async def vote_challenge_reaction(payload: RawReactionActionEvent, db: Database)
         return False
 
     # Call main vote_reaction function
-    return await _match.vote_reaction(payload, challenge_message, db, db_guild, db_challenge)
+    return await _match.vote_button(interaction, button, challenge_message, db_guild, db_challenge)
 
-async def report_challenge(challenge_message: Message, db: Database, db_guild: dict, db_challenge: dict, winner_emote: str, is_dq: bool=False):
+async def report_challenge(challenge_message: Message, db_guild: dict, db_challenge: dict, winner_emote: str, is_dq: bool=False):
     """
     Reports a challenge winner and updates the leaderboard
     """
@@ -282,7 +251,7 @@ async def report_challenge(challenge_message: Message, db: Database, db_guild: d
     # Update status in db
     try:
         db_challenge.update({'completed': datetime.now(), 'winner_emote': winner_emote})
-        updated_challenge = await set_challenge(db, db_guild['guild_id'], challenge_id, db_challenge)
+        await set_challenge(db_guild['guild_id'], challenge_id, db_challenge)
     except Exception as e:
         printlog(f"Failed to report challenge ['id'={challenge_id}] in database.", e)
         return None, None
@@ -290,7 +259,7 @@ async def report_challenge(challenge_message: Message, db: Database, db_guild: d
     # Update challenge embed
     challenge_embed = challenge_message.embeds[0]
     confirm_embed = _match.edit_match_embed_confirmed(challenge_embed, db_challenge['player1'], db_challenge['player2'], winner_emote, is_dq)
-    await challenge_message.edit(embed=confirm_embed)
+    await challenge_message.edit(embed=confirm_embed, view=None)
     print("Succesfully reported challenge [id={0}]. Winner = '{1}'.".format(challenge_id, winner['name']))
 
     # Update leaderboard
@@ -298,17 +267,17 @@ async def report_challenge(challenge_message: Message, db: Database, db_guild: d
     user1 = _leaderboard.find_leaderboard_user_by_id(db_guild, db_challenge['player1']['id'])
     if not user1:
         # Create new leaderboard user
-        await _leaderboard.create_leaderboard_user(db, challenge_message.guild, db_challenge, db_challenge['player1'], winner_emote == '1️⃣')
+        await _leaderboard.create_leaderboard_user(challenge_message.guild, db_challenge, db_challenge['player1'], winner_emote == '1️⃣')
     else:
         # Update existing leaderboard user
-        await _leaderboard.update_leaderboard_user_score(db, challenge_message.guild, db_challenge, user1, winner_emote == '1️⃣')
+        await _leaderboard.update_leaderboard_user_score(challenge_message.guild, db_challenge, user1, winner_emote == '1️⃣')
 
     user2 = _leaderboard.find_leaderboard_user_by_id(db_guild, db_challenge['player2']['id'])
     if not user2:
-        await _leaderboard.create_leaderboard_user(db, challenge_message.guild, db_challenge, db_challenge['player2'], winner_emote == '2️⃣')
+        await _leaderboard.create_leaderboard_user(challenge_message.guild, db_challenge, db_challenge['player2'], winner_emote == '2️⃣')
     else:
         # Update existing leaderboard user
-        await _leaderboard.update_leaderboard_user_score(db, challenge_message.guild, db_challenge, user2, winner_emote == '2️⃣')
+        await _leaderboard.update_leaderboard_user_score(challenge_message.guild, db_challenge, user2, winner_emote == '2️⃣')
     return True
 
 #######################
@@ -329,7 +298,7 @@ def create_challenge_embed(db_challenge: dict):
         embed.add_field(name=f"Waiting for Challenger...", value=f'1️⃣ <@{player1_id}> vs ??? 2️⃣', inline=False)
     else:
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
-    embed.set_footer(text="React with 🥊 to accept this challenge.")
+    embed.set_footer(text=f"Created by {player1_name}.", icon_url=db_challenge['player1']['avatar_url'])
     return embed
 
 def edit_challenge_embed_start(db_challenge: dict, embed: Embed):
@@ -360,52 +329,59 @@ class accept_view(discord.ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Accept 🥊", style=discord.ButtonStyle.green, custom_id="accept_challenge")
+    @discord.ui.button(label="Accept", emoji='🥊', style=discord.ButtonStyle.grey, custom_id="accept_challenge")
     async def accept(interaction: discord.Interaction, button: discord.ui.Button):
-        pass
-        # accept_challenge(self)
+        await accept_challenge(interaction, button)
+
+class voting_buttons_view(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=None)
+
+    @discord.ui.button(emoji='1️⃣', style=discord.ButtonStyle.grey, custom_id="join_bracket")
+    async def vote_player1(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await vote_challenge_button(interaction, button)
+
+    @discord.ui.button(emoji='2️⃣', style=discord.ButtonStyle.grey, custom_id="leave_bracket")
+    async def vote_player2(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await vote_challenge_button(interaction, button)
 
 ######################
 ## HELPER FUNCTIONS ##
 ######################
 
-async def parse_args(message: Message, db: Database, db_guild: dict, usage: str, argv: list, argc: int, f_argc: int=2, send: bool=True):
+async def retrieve_valid_challenge(interaction: Interaction, db_guild: dict, challenge_id: int=None, send: bool=True):
     """"
     Parses arguments for bracket functions. Checks if there is a valid challenge.
     """
-    if argc < f_argc:
-        await message.channel.send(usage)
-        return (None, None)
     # Get challenge from database
-    if message.reference:
-        challenge_id = message.reference.message_id
+    if challenge_id:
         # Check if challenge exists
         db_challenge = find_challenge(db_guild, challenge_id)
         if not db_challenge:
             if send: 
-                await message.channel.send(f"Something went wrong when finding the challenge.")
+                await interaction.response.send_message(f"Something went wrong when finding the challenge.", ephemeral=True)
             return (None, None)
     else:
         # Get user's active match, if exists
-        db_challenge = find_active_challenge_by_user(db_guild, message.author.id)
+        db_challenge = find_active_challenge_by_user(db_guild, interaction.user.id)
         if not db_challenge:
             if send: 
-                await message.channel.send(f"You do not have any open challenges.")
+                await interaction.response.send_message(f"You do not have any open challenges.", ephemeral=True)
             return (None, None)
         challenge_id = db_challenge['id']
     return (db_challenge, challenge_id)
 
-async def set_challenge(db: Database, guild_id: int, challenge_id: int, new_challenge: dict):
+async def set_challenge(guild_id: int, challenge_id: int, new_challenge: dict):
     """
     Sets a challenge in a guild to the specified document.
     """
-    return await mdb.update_single_document(db, 
+    return await mdb.update_single_document(
         {'guild_id': guild_id, 'challenges.id': challenge_id}, 
         {'$set': {f'challenges.$': new_challenge}
         },
         GUILDS)
 
-async def update_player(db: Database, db_guild: dict, challenge_id: int, updated_player1=None, updated_player2=None):
+async def update_player(db_guild: dict, challenge_id: int, updated_player1=None, updated_player2=None):
     """
     Updates the players in a match.
     """
@@ -416,4 +392,4 @@ async def update_player(db: Database, db_guild: dict, challenge_id: int, updated
         db_challenge['player2'] = updated_player2
     if not (updated_player1 or updated_player2):
         return None
-    return await set_challenge(db, db_guild['guild_id'], challenge_id, db_challenge)
+    return await set_challenge(db_guild['guild_id'], challenge_id, db_challenge)
