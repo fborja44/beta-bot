@@ -231,20 +231,26 @@ async def disqualify(interaction: Interaction, entrant_name: str, bracket_title:
     await bracket.disqualify_entrant_main(interaction, entrant_name, bracket_title)
 
 # Challenge Commands
-BracketGroup = app_commands.Group(name="challenge", description="Challenge commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
-@BracketGroup.command(description="Creates a challenge.")
+ChallengeGroup = app_commands.Group(name="challenge", description="Challenge commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+@ChallengeGroup.command(description="Creates a challenge.")
 async def create(interaction: Interaction, best_of: int = 3, player_mention: str = ""):
     await challenge.create_challenge(bot_client, interaction, best_of, player_mention)
 
-@BracketGroup.command(description="Cancels a challenge that has not yet been completed.")
+@ChallengeGroup.command(description="Cancels a challenge that has not yet been completed.")
 async def cancel(interaction: Interaction, challenge_id: int = None):
     await challenge.cancel_challenge(interaction, challenge_id)
 
-@BracketGroup.command(description="[Privileged] Deletes a challenge.")
-async def delete(interaction: Interaction, challenge_id: int = None):
-    await challenge.cancel_challenge(interaction, challenge_id, delete=True)
+@ChallengeGroup.command(description="[Privileged] Deletes a challenge.")
+async def delete(interaction: Interaction, challenge_id: str = None):
+    if not challenge_id.isnumeric():
+        await interaction.response.send_message("`challenge_id` must be a valid integer.", ephemeral=True)
+        return False
+    await challenge.cancel_challenge(interaction, int(challenge_id), delete=True)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 tree.add_command(BracketGroup, guild=discord.Object(id=713190806688628786))
+
+tree.add_command(ChallengeGroup, guild=TEST_GUILD)
+tree.add_command(ChallengeGroup, guild=discord.Object(id=713190806688628786))
 
 bot_client.run(TOKEN)

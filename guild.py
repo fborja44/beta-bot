@@ -88,13 +88,14 @@ async def push_to_guild(guild: Guild, target_array: str, document: dict):
     """
     guild_id = guild.id
     document_id = document['id']
-    print(document)
-    await find_update_add_guild(guild)
+    db_guild = await find_add_guild(guild)
+    if not db_guild:
+        return None
     db_guild = await mdb.update_single_document({'guild_id': guild_id}, {'$push': {target_array: document}}, GUILDS)
     if db_guild:
         print(f"Successfully pushed subdocument ['id'={document_id}] to field '{target_array}' in guild ['name'='{guild.name}'].")
         return document
-    print(f"Failed to push subdocument ['id'={document_id}] to field '{target_array}' in guild ['name'='{guild.name}'].")
+    print(f"Failed to push subdocument ['id'='{document_id}'] to field '{target_array}' in guild ['name'='{guild.name}'].")
     return None
 
 async def pull_from_guild(guild: Guild, target_array: str, document: dict):

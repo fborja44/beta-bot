@@ -166,7 +166,7 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
     try:
         player1 = db_match['player1']
         player2 = db_match['player2']
-        if voter == db_match['player1']:
+        if voter == player1:
             player1['vote'] = vote
             if db_bracket:
                 result = await update_player(db_guild['guild_id'], db_bracket, match_id, updated_player1=player1)
@@ -456,7 +456,7 @@ def create_match_embed(db_bracket: dict, db_match: dict):
     else: 
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
     # embed.add_field(name=f'Bracket Link', value=url, inline=False)
-    embed.set_footer(text=f"Players vote with 1️⃣ or 2️⃣ to report the winner.\nchallonge_id: {match_challonge_id}")
+    embed.set_footer(text=f"Players vote with 1️⃣ or 2️⃣ to report the winner.\nmatch_id: {match_challonge_id}")
     return embed
 
 def edit_match_embed_dispute(embed: Embed):
@@ -467,13 +467,16 @@ def edit_match_embed_dispute(embed: Embed):
     embed.color = 0xD4180F
     return embed
 
-def edit_match_embed_confirmed(embed: Embed, match_challonge_id: int, player1: dict, player2: dict, winner_emote: str, is_dq: bool=False):
+def edit_match_embed_confirmed(embed: Embed, match_id: int, player1: dict, player2: dict, winner_emote: str, is_dq: bool=False):
     """
-    Updates embed object for confirmed match
+    Updates embed object for confirmed match.
+    For tournament bracket matches, match_id is the challonge_id.
+    For 1v1 challenge matches, match_id is the id (message_id).
     """
     time = datetime.now().strftime("%#I:%M %p %Z")
     player1_id = player1['id']
     player2_id = player2['id']
+
     if winner_emote == '1️⃣':
         winner = player1
         player1_emote = '⭐'
@@ -487,7 +490,7 @@ def edit_match_embed_confirmed(embed: Embed, match_challonge_id: int, player1: d
     if len(embed.fields) > 1:
         # Remove dispute field
         embed.remove_field(1)
-    embed.set_footer(text=f"Result finalized. To change result, contact a bracket manager.\nchallonge_id: {match_challonge_id}")
+    embed.set_footer(text=f"Result finalized. To change result, contact a bracket manager.\nmatch_id: {match_id}")
     embed.color = 0x000000
     return embed
 

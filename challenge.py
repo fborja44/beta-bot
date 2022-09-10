@@ -16,7 +16,7 @@ import re
 # 1v1 challenges
 
 type_match = re.compile(r'^[Bb][Oo][0-9]+$')
-id_match = re.compile(r'^<@[0-9]+>$')
+id_match = re.compile(r'^<@![0-9]+>$')
 
 def find_challenge(db_guild: dict, challenge_id: int):
     """
@@ -45,33 +45,34 @@ async def create_challenge(client: Client, interaction: Interaction, best_of: in
     Creates a new challenge match between two players.
     If player_mention is None, waits for a challenger.
     """
+    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     player1: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     # TODO: Check if already has active challenge
     active_challenge = find_active_challenge_by_user(db_guild, player1.id)
     if active_challenge:
-        await interaction.response.send_message("You already have an active challenge.")
+        await interaction.response.send_message("You already have an active challenge.", ephemeral=True)
         return False
 
     # Parse arguments; default type = Bo3
     # usage = 'Usage: `$challenge create [type]`\nex. $challenge create 3'
     # Check number of rounds
     if best_of % 2 != 1: # must be odd
-        await interaction.response.send_message("There must be an odd number of rounds.", )
+        await interaction.response.send_message("There must be an odd number of rounds.", ephemeral=True)
         return False
 
-    usage = f'Usage: `/challenge [best_of] [@<user>] `\nex. /challenge 3 <@{client.user.id}>'
+    usage = f'Usage: `/challenge [best_of] @[player_mention] `\nex. `/challenge best_of: 3 player_mention: <@!{client.user.id}>`'
     # Check for metioned user
     if len(player_mention.strip()) > 0:
         matched_id = id_match.search(player_mention)
         if matched_id:
-            player2 = player_mention[2:-1]
+            player2: Member = await guild.fetch_member(int(player_mention[3:-1]))
         else:
             await interaction.response.send_message(f"Invalid input for user.\n{usage}", ephemeral=True)
             return False
     else:
-        player2 = None
+        player2: Member = None
 
     player1_id = player1.id
     player1_name = player1.name
@@ -94,18 +95,30 @@ async def create_challenge(client: Client, interaction: Interaction, best_of: in
         },
         "best_of": best_of,
         "winner_emote": None,
-        "open": open,
+        "open": player2 is None,
+        "accepted": False,
         "completed": False
     }
 
     # Send embed message
     embed = create_challenge_embed(new_challenge)
-    challenge_message: Message = await interaction.response.send_message(embed=embed, view=accept_view())
+    challenge_message: Message = await channel.send(
+        content=f"<@!{player2.id}> has been challenged by <@!{player1.id}>!" if player_mention else "",
+        embed=embed, 
+        view=accept_view()
+    )
 
     # Add challenge to database
-    new_challenge['id'] = challenge_message.id
-    await _guild.push_to_guild(guild, CHALLENGES, new_challenge)
-    print(f"User '{player1.name}' [id={player1.id}] created new challenge ['id'={new_challenge['id']}].")
+    try:
+        pprint(new_challenge)
+        new_challenge['id'] = challenge_message.id
+        await _guild.push_to_guild(guild, CHALLENGES, new_challenge)
+    except Exception as e:
+        printlog(f"Failed to add challenge ['id'='{challenge_message.id}'] to guild ['guild_id'='{guild.id}'].", e)
+        if challenge_message: await challenge_message.delete()
+        return None
+    print(f"User '{player1.name}' ['id'='{player1.id}'] created new challenge ['id'='{new_challenge['id']}'].")
+    await interaction.response.send_message(f"Successfully created new challenge.", ephemeral=True)
     return new_challenge
 
 async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: bool=False):
@@ -137,7 +150,7 @@ async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: 
         return False
     # Only cancel if not open
     if not delete:
-        if not db_challenge['open'] or db_challenge['completed']:
+        if db_challenge['accepted'] or db_challenge['completed']:
             await interaction.response.send_message(f"You may not cancel challenges that are in progress or completed.", ephemeral=True)
             return False
 
@@ -152,7 +165,7 @@ async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: 
         return False
     if result:
         print(f"User '{user.name}' [id={user.id}] cancelled/deleted challenge ['id'='{challenge_id}'].")
-        await interaction.response.send_message("Challenge has been successfully cancelled.")
+        await interaction.response.send_message("Challenge has been successfully cancelled.", ephemeral=True)
         return True
     else:
         return False
@@ -172,7 +185,7 @@ async def accept_challenge(interaction: Interaction, button: Button):
     challenge_message: Message = await channel.fetch_message(message_id)
 
     # Check if reaction was on a challenge message
-    db_challenge = find_challenge(db_guild, message_id)
+    db_challenge: dict = find_challenge(db_guild, message_id)
     if not db_challenge:
         return False
     # Check if user created the challenge
@@ -190,6 +203,11 @@ async def accept_challenge(interaction: Interaction, button: Button):
             await interaction.response.send_message("You are not the user being challenged.", ephemeral=True)
             return False
     else: # Queuing for challenge
+        # Check if accepted
+        if db_challenge['accepted']:
+            await interaction.response.send_message("This challenge has already been accepted.", ephemeral=True)
+            return False
+
         # Check if open
         if not db_challenge['open']:
             await interaction.response.send_message("This challenge is currently not open.", ephemeral=True)
@@ -203,7 +221,7 @@ async def accept_challenge(interaction: Interaction, button: Button):
         }
     
     # Set to closed
-    db_challenge['open'] = False
+    db_challenge.update({'open': False, 'accepted': True})
     # Update challenge in databse
     result = await set_challenge(guild.id, challenge_message.id, db_challenge)
     if not result:
@@ -213,6 +231,7 @@ async def accept_challenge(interaction: Interaction, button: Button):
     # Update message embed and buttons
     updated_embed = edit_challenge_embed_start(db_challenge, challenge_message.embeds[0])
     await challenge_message.edit(embed=updated_embed, view=voting_buttons_view())
+    await interaction.response.send_message(f"You have accepted the challenge by <@{db_challenge['player1']['id']}>!", ephemeral=True)
     return True
 
 async def vote_challenge_button(interaction: Interaction, button: Button):
@@ -258,7 +277,7 @@ async def report_challenge(challenge_message: Message, db_guild: dict, db_challe
     
     # Update challenge embed
     challenge_embed = challenge_message.embeds[0]
-    confirm_embed = _match.edit_match_embed_confirmed(challenge_embed, db_challenge['player1'], db_challenge['player2'], winner_emote, is_dq)
+    confirm_embed = _match.edit_match_embed_confirmed(challenge_embed, challenge_id, db_challenge['player1'], db_challenge['player2'], winner_emote, is_dq)
     await challenge_message.edit(embed=confirm_embed, view=None)
     print("Succesfully reported challenge [id={0}]. Winner = '{1}'.".format(challenge_id, winner['name']))
 
@@ -298,7 +317,7 @@ def create_challenge_embed(db_challenge: dict):
         embed.add_field(name=f"Waiting for Challenger...", value=f'1️⃣ <@{player1_id}> vs ??? 2️⃣', inline=False)
     else:
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
-    embed.set_footer(text=f"Created by {player1_name}.", icon_url=db_challenge['player1']['avatar_url'])
+    embed.set_footer(text=f"Created by {player1_name}.")
     return embed
 
 def edit_challenge_embed_start(db_challenge: dict, embed: Embed):
@@ -310,7 +329,7 @@ def edit_challenge_embed_start(db_challenge: dict, embed: Embed):
     embed.color = 0x50C878
     embed.description += "\nAwaiting result..."
     embed.set_field_at(0, name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
-    embed.set_footer(text="Players react with 1️⃣ or 2️⃣ to report the winner.")
+    embed.set_footer(text=f"\nPlayers react with 1️⃣ or 2️⃣ to report the winner.\nmatch_id: {db_challenge['id']}")
     return embed
 
 def edit_challenge_embed_dispute(embed: Embed):
@@ -329,8 +348,8 @@ class accept_view(discord.ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Accept", emoji='🥊', style=discord.ButtonStyle.grey, custom_id="accept_challenge")
-    async def accept(interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Accept", emoji='🥊', style=discord.ButtonStyle.green, custom_id="accept_challenge")
+    async def accept(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
         await accept_challenge(interaction, button)
 
 class voting_buttons_view(discord.ui.View):
