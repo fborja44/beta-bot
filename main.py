@@ -53,6 +53,7 @@ class MyBot(discord.Client):
         await self.wait_until_ready()
         if not self.synced: # Do NOT reset more than once per minute
             await tree.sync(guild=TEST_GUILD) # change to global when ready
+            await tree.sync(guild=discord.Object(id=713190806688628786))
             self.synced = True
         if not self.views:
             self.add_view(bracket.registration_buttons_view())
@@ -190,39 +191,44 @@ intents.members = True
 bot_client = MyBot(intents=intents)
 tree = app_commands.CommandTree(bot_client)
 
-BracketGroup = app_commands.Group(name="bracket", description="Bracket commands", guild_ids=[133296587047829505], guild_only=True)
+BracketGroup = app_commands.Group(name="bracket", description="Bracket commands", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
 @BracketGroup.command(description="[Privileged] Creates a test bracket.")
 async def test(interaction: Interaction, num_entrants: int = 4):
     await bracket.create_test_bracket(interaction, num_entrants)
 
 @BracketGroup.command(description="Creates a tournament bracket.")
-async def create(interaction: Interaction, title: str, time: str=""):
-    await bracket.create_bracket(interaction, title, time)
+async def create(interaction: Interaction, bracket_title: str, time: str=""):
+    await bracket.create_bracket(interaction, bracket_title, time)
 
 @BracketGroup.command(description="Deletes a tournament bracket.")
-async def delete(interaction: Interaction, title: str=""):
-    await bracket.delete_bracket(interaction, title)
+async def delete(interaction: Interaction, bracket_title: str=""):
+    await bracket.delete_bracket(interaction, bracket_title)
 
 @BracketGroup.command(description="Starts a tournament bracket.")
-async def start(interaction: Interaction, title: str=""):
-    await bracket.start_bracket(interaction, title)
+async def start(interaction: Interaction, bracket_title: str=""):
+    await bracket.start_bracket(interaction, bracket_title)
 
 @BracketGroup.command(description="Resets a tournament bracket.")
-async def reset(interaction: Interaction, title: str=""):
-    await bracket.reset_bracket(interaction, title)
+async def reset(interaction: Interaction, bracket_title: str=""):
+    await bracket.reset_bracket(interaction, bracket_title)
 
 @BracketGroup.command(description="Finalizes a tournament bracket.")
-async def finalize(interaction: Interaction, title: str=""):
-    await bracket.finalize_bracket(interaction, title)
+async def finalize(interaction: Interaction, bracket_title: str=""):
+    await bracket.finalize_bracket(interaction, bracket_title)
 
 @BracketGroup.command(description="Sends the results for a completed tournament bracket.")
-async def results(interaction: Interaction, title: str=""):
-    await bracket.send_results(interaction, title)
+async def results(interaction: Interaction, bracket_title: str=""):
+    await bracket.send_results(interaction, bracket_title)
 
 @BracketGroup.command(description="Manually reports the score for a tournament bracket match.")
-async def report(interaction: Interaction, challonge_id: int, winner: str):
-    await match.override_match_result(interaction, challonge_id, winner)
+async def report(interaction: Interaction, match_challonge_id: int, winner: str):
+    await match.override_match_result(interaction, match_challonge_id, winner)
+
+@BracketGroup.command(description="Disqualifies or removes an entrant from a tournament bracket.")
+async def disqualify(interaction: Interaction, entrant_name: str, bracket_title: str=""):
+    await bracket.disqualify_entrant_main(interaction, entrant_name, bracket_title)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
+tree.add_command(BracketGroup, guild=discord.Object(id=713190806688628786))
 
 bot_client.run(TOKEN)

@@ -142,7 +142,7 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
     match_embed: Embed = match_message.embeds[0]
     user: Member = interaction.user
     # Defer response
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     # Check if user was one of the players
     if user.id == db_match['player1']['id']:
         voter = db_match['player1']
