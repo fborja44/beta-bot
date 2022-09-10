@@ -6,6 +6,7 @@ from logger import printlog
 from pprint import pprint
 import asyncio
 import bracket as _bracket
+import challenge as _challenge
 import discord
 import guild as _guild
 import match as _match
@@ -47,26 +48,37 @@ async def retrieve_leaderboard(interaction: Interaction):
     db_guild: dict = await _guild.find_guild(guild.id)
     db_leaderboard: dict = db_guild['leaderboard']
 
-async def retrieve_leaderboard_user_stats(interaction: Interaction, username: str):
+async def retrieve_leaderboard_user_stats(interaction: Interaction, player_mention: str):
     """
     Retrieves the stats for a user in a guild leaderboard.
     If not is not specified, retrieves the stats for the user who issued the command.
     """
+    if len(player_mention.strip()) > 0:
+        matched_id = _challenge.id_match.search(player_mention)
+        if matched_id:
+            user: Member = await interaction.guild.fetch_member(int(player_mention[3:-1]))
+        else:
+            await interaction.response.send_message(f"Invalid player mention.", ephemeral=True)
+            return False
+    else:
+        user: Member = interaction.user
     # Parse args
     # usage = 'Usage: `/leaderboard stats [name]`'
     guild: Guild = interaction.guild
     db_guild = await _guild.find_guild(guild.id)
     # Check if user is in leaderboard
-    db_user = find_leaderboard_user(db_guild, username)
+    db_user = find_leaderboard_user_by_id(db_guild, user.id)
     if not db_user:
-        await interaction.response.send_message(f"User '{username}' has no record in the leaderboard.")
+        await interaction.response.send_message(f"User <@!{user.id}> has no record in the leaderboard.", ephemeral=True)
         return False
     # Send stats of user
     total_matches = len(db_user['matches'])
     wins = db_user['wins']
     losses = db_user['losses']
     win_rate = "{0:.2%}".format(wins / total_matches)
-    await interaction.response.send_message(f"📈 Stats for user '{username}':\nTotal Challenges: {total_matches}\n🏆 Wins: {wins}\n❌ Losses: {losses}\n Win %: {win_rate}")
+    stat_embed = create_player_stat_embed(db_user, user)
+    await interaction.channel.send(embed=stat_embed)
+    await interaction.response.send_message(f"Found stats for user <@!{user.id}>!", ephemeral=True)
     return True
 
 async def create_leaderboard_user(guild: Guild, db_challenge: dict, db_player: dict, win: bool):
@@ -88,11 +100,10 @@ async def create_leaderboard_user(guild: Guild, db_challenge: dict, db_player: d
         return None
     return new_user
 
-async def update_leaderboard_user_score(guild: Guild, db_challenge: dict, db_user: dict, win: bool):
+async def update_leaderboard_user_score(guild_id: int, db_challenge: dict, db_user: dict, win: bool):
     """
     Updates a user's wins/losses in a guild challenge leaderboard.
     """
-    db_user['total_matches'] += 1
     if win:
         db_user['wins'] += 1
     else:
@@ -101,18 +112,42 @@ async def update_leaderboard_user_score(guild: Guild, db_challenge: dict, db_use
     # Add challenge to list
     db_user['matches'].append(db_challenge['id'])
     try:
-        await set_leaderboard_user(guild, LEADERBOARD, db_user)
+        result = await set_leaderboard_user(guild_id, db_user['id'], db_user)
+        if not result: 
+            print(f"Failed to update record of to user ['id'='{db_user['id']}'] in leaderboard ['guild_id'='{guild_id}'].")
         if win:
-            print(f"Added win to user ['id'='{db_user['id']}'] in leaderboard ['guild_id'='{guild.id}'].")
+            print(f"Added win to user ['id'='{db_user['id']}'] in leaderboard ['guild_id'='{guild_id}'].")
         else:
-            print(f"Added loss to user ['id'='{db_user['id']}'] in leaderboard ['guild_id'='{guild.id}'].")
+            print(f"Added loss to user ['id'='{db_user['id']}'] in leaderboard ['guild_id'='{guild_id}'].")
     except Exception as e:
         if win:
-            printlog(f"Failed to add user ['id'={db_user['id']}] in leaderboard ['guild_id'='{guild.id}'].", e)
+            printlog(f"Failed to add user ['id'={db_user['id']}] in leaderboard ['guild_id'='{guild_id}'].", e)
         else:
-            printlog(f"Failed to add loss to user ['id'='{db_user['id']}'] in leaderboard ['guild_id'='{guild.id}'].")
+            printlog(f"Failed to add loss to user ['id'='{db_user['id']}'] in leaderboard ['guild_id'='{guild_id}'].")
         return None
     return db_user
+
+#######################
+## MESSAGE FUNCTIONS ##
+#######################
+
+def create_player_stat_embed(db_user: dict, user: Member):
+    total_matches = len(db_user['matches'])
+    wins = db_user['wins']
+    losses = db_user['losses']
+    win_rate = "{0:.2%}".format(wins / total_matches)
+    embed = Embed(title=f"📈 Leaderboard Player Stats", description=f"Stats for: <@!{db_user['id']}>", color=0xFAD25A)
+    embed.set_author(name=f"{user.display_name} | {user.name}#{user.discriminator}", icon_url=user.display_avatar.url)
+    embed.add_field(name="Wins", value=f"{wins}")
+    embed.add_field(name="Losses", value=f"{losses}")
+    embed.add_field(name="Total Matches", value=f"{total_matches}")
+    embed.add_field(name="Win Rate", value=f"{win_rate}")
+    embed.set_footer(text=f"beta-bot | GitHub 🤖", icon_url=ICON)
+    return embed
+
+######################
+## HELPER FUNCTIONS ##
+######################
 
 async def set_leaderboard_user(guild_id: int, user_id: int, new_user: dict):
     """

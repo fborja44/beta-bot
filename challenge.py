@@ -34,7 +34,7 @@ def find_active_challenge_by_user(db_guild: dict, user_id: int):
     """
     try:
         return list(filter(
-            lambda challenge: not challenge['open'] and not challenge['completed']
+            lambda challenge: not challenge['completed']
                 and challenge['player1']['id'] == user_id, 
             db_guild['challenges']))[0]
     except:
@@ -69,7 +69,7 @@ async def create_challenge(client: Client, interaction: Interaction, best_of: in
         if matched_id:
             player2: Member = await guild.fetch_member(int(player_mention[3:-1]))
         else:
-            await interaction.response.send_message(f"Invalid input for user.\n{usage}", ephemeral=True)
+            await interaction.response.send_message(f"Invalid player mention.\n{usage}", ephemeral=True)
             return False
     else:
         player2: Member = None
@@ -163,16 +163,33 @@ async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: 
     except:
         print(f"Failed to delete challenge ['id'={challenge_id}].")
         return False
-    if result:
-        print(f"User '{user.name}' [id={user.id}] cancelled/deleted challenge ['id'='{challenge_id}'].")
-        await interaction.response.send_message("Challenge has been successfully cancelled.", ephemeral=True)
-        return True
-    else:
+    if not result:
+        print(f"Something went wrong when deleting challenge ['id'={challenge_id}].")
         return False
+    print(f"User '{user.name}' [id={user.id}] cancelled/deleted challenge ['id'='{challenge_id}'].")
+    await interaction.response.send_message("Challenge has been successfully cancelled.", ephemeral=True)
+    
+    # Update leaderboard if deleting a completed match
+    if delete and db_challenge['completed']:
+        # Find the winner
+        if db_challenge['winner_emote'] == '1️⃣':
+            db_winner: dict = _leaderboard.find_leaderboard_user(db_guild, db_challenge['player1']['name'])
+            db_loser: dict = _leaderboard.find_leaderboard_user(db_guild, db_challenge['player2']['name'])
+        else:
+            db_winner = _leaderboard.find_leaderboard_user(db_guild, db_challenge['player2']['name'])
+            db_loser = _leaderboard.find_leaderboard_user(db_guild, db_challenge['player1']['name'])
+        # Update records
+        db_winner['matches'] = list(filter(lambda match_id: match_id != db_challenge['id'], db_winner['matches']))
+        db_winner.update({'wins': db_winner['wins']-1})
+        db_loser['matches'] = list(filter(lambda match_id: match_id != db_challenge['id'], db_winner['matches']))
+        db_loser.update({'losses': db_loser['losses']-1})
+        await _leaderboard.set_leaderboard_user(guild.id, db_winner['id'], db_winner)
+        print(f"Removed win from leaderboard user ['name'='{db_winner['name']}'].")
+        await _leaderboard.set_leaderboard_user(guild.id, db_loser['id'], db_loser)
+        print(f"Removed loss from leaderboard user ['name'='{db_loser['name']}'].")
+    return True
 
-    # TODO: If deleting a completed challenge, update leaderboard
-
-async def accept_challenge(interaction: Interaction, button: Button):
+async def accept_challenge(interaction: Interaction):
     """
     Accepts an open challenge.
     """
@@ -289,14 +306,14 @@ async def report_challenge(challenge_message: Message, db_guild: dict, db_challe
         await _leaderboard.create_leaderboard_user(challenge_message.guild, db_challenge, db_challenge['player1'], winner_emote == '1️⃣')
     else:
         # Update existing leaderboard user
-        await _leaderboard.update_leaderboard_user_score(challenge_message.guild, db_challenge, user1, winner_emote == '1️⃣')
+        await _leaderboard.update_leaderboard_user_score(challenge_message.guild.id, db_challenge, user1, winner_emote == '1️⃣')
 
     user2 = _leaderboard.find_leaderboard_user_by_id(db_guild, db_challenge['player2']['id'])
     if not user2:
         await _leaderboard.create_leaderboard_user(challenge_message.guild, db_challenge, db_challenge['player2'], winner_emote == '2️⃣')
     else:
         # Update existing leaderboard user
-        await _leaderboard.update_leaderboard_user_score(challenge_message.guild, db_challenge, user2, winner_emote == '2️⃣')
+        await _leaderboard.update_leaderboard_user_score(challenge_message.guild.id, db_challenge, user2, winner_emote == '2️⃣')
     return True
 
 #######################
@@ -350,7 +367,7 @@ class accept_view(discord.ui.View):
 
     @discord.ui.button(label="Accept", emoji='🥊', style=discord.ButtonStyle.green, custom_id="accept_challenge")
     async def accept(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
-        await accept_challenge(interaction, button)
+        await accept_challenge(interaction)
 
 class voting_buttons_view(discord.ui.View):
     def __init__(self) -> None:

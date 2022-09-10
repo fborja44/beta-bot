@@ -1,4 +1,4 @@
-from discord import app_commands, Guild, Message, Interaction
+from discord import app_commands, Guild, Member, Message, Interaction
 from colorama import Fore, Back, Style
 from common import CHALLONGE_USER, CHALLONGE_KEY, MONGO_ADDR, TOKEN
 from dotenv import load_dotenv
@@ -59,6 +59,7 @@ class MyBot(discord.Client):
             self.add_view(bracket.registration_buttons_view())
             self.add_view(match.voting_buttons_view())
             self.add_view(challenge.accept_view())
+            self.add_view(challenge.voting_buttons_view())
             self.views = True
         # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
         # for guild in self.guilds:
@@ -71,121 +72,6 @@ class MyBot(discord.Client):
 
     async def on_guild_remove(self, guild: Guild):
         await _guild.delete_guild(db, guild)
-
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
-        # Check if reacting to self 
-        if payload.user_id == self.user.id:
-            return
-        elif payload.emoji.name == '✅':
-            # Update bracket entrants
-            await bracket.update_bracket_entrants(payload, db)
-        elif payload.emoji.name == '1️⃣' or payload.emoji.name == '2️⃣':
-            # Update match or challenge vote
-            result = await match.vote_match_reaction(payload, db)
-            if not result:
-                await challenge.vote_challenge_reaction(payload, db)
-        elif payload.emoji.name == '🥊':
-            # Update challenge status
-            await challenge.accept_challenge(payload, db)
-    
-    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent): # use raw to include older messages
-        # Check if reacting to self 
-        if payload.user_id == self.user.id:
-            return
-        elif payload.emoji.name == '✅':
-            # Update bracket entrants
-            await bracket.update_bracket_entrants(payload, db)
-        elif payload.emoji.name == '1️⃣' or payload.emoji.name == '2️⃣':
-            # Update match vote
-            await match.vote_match_reaction(payload, db)
-
-    async def on_message(self, message: Message): # Event went the bot receives a message
-        if message.author == bot_client.user: # Checks if message is from self
-            return
-
-        # Send bot help message
-        elif message.content.startswith('$info'):
-            # TODO
-            return
-
-        # Brackets
-        elif message.content.startswith('$bracket'):
-            usage = 'Usage: `$bracket <option>`'
-            # Parse args
-            argv = message.content.split()
-            argc = len(argv)
-            if argc == 1:
-                return await message.channel.send(usage)
-            # Get option
-            match argv[1].lower():
-                case "create":
-                    await bracket.create_bracket(message, db, argv, argc)
-                case "edit":
-                    await bracket.update_bracket(message, db, argv, argc)
-                case "delete":
-                    await bracket.delete_bracket(message, db, argv, argc)
-                case "start":
-                    await bracket.start_bracket(message, db, argv, argc)
-                case "finalize":
-                    await bracket.finalize_bracket(message, db, argv, argc)
-                case "reset":
-                    await bracket.reset_bracket(message, db, argv, argc)
-                case "results":
-                    await bracket.send_results(message, db, argv, argc)
-                case "report":
-                    await match.override_match_score(message, db, argv, argc)
-                case "dq":
-                    await bracket.disqualify_entrant_main(message, db, argv, argc)
-                case "test":
-                    await bracket.create_test_bracket(message, db, argv, argc)
-                case _:
-                    # TODO: List options
-                    await message.channel.send("Command not recognized.")
-            await message.delete()
-
-        # Challenges
-        elif message.content.startswith('$challenge'):
-            usage = 'Usage: `$challenge <option>`'
-            # Parse args
-            argv = message.content.split()
-            argc = len(argv)
-            if argc == 1:
-                return await message.channel.send(usage)
-            # Get option
-            match argv[1].lower():
-                case "create":
-                    await challenge.create_challenge_queue(message, db, argv, argc)
-                case "cancel":
-                    await challenge.cancel_challenge(message, db, argv, argc)
-                case "delete":
-                    await challenge.cancel_challenge(message, db, argv, argc, delete=True)
-                case "override":
-                    pass
-                case "test":
-                    pass
-                case _:
-                    if argc >= 2:
-                        await challenge.create_challenge_direct(message, db, argv, argc)
-                    else:
-                        # TODO: list options
-                        pass
-            await message.delete()
-
-        # Leaderboard
-        elif message.content.startswith('$leaderboard'):
-            # Parse args
-            argv = message.content.split()
-            argc = len(argv)
-            if argc == 1:
-                return await message.channel.send(usage)
-            # Get option
-            match argv[1].lower():
-                case "stats":
-                    await leaderboard.retrieve_leaderboard_user_stats(message, db, argv, argc)
-                case _:
-                    # TODO: list options
-                    pass
-            await message.delete()
 
 intents = discord.Intents.default()
 intents.members = True
@@ -241,16 +127,25 @@ async def cancel(interaction: Interaction, challenge_id: int = None):
     await challenge.cancel_challenge(interaction, challenge_id)
 
 @ChallengeGroup.command(description="[Privileged] Deletes a challenge.")
-async def delete(interaction: Interaction, challenge_id: str = None):
+async def delete(interaction: Interaction, challenge_id: str):
     if not challenge_id.isnumeric():
         await interaction.response.send_message("`challenge_id` must be a valid integer.", ephemeral=True)
         return False
     await challenge.cancel_challenge(interaction, int(challenge_id), delete=True)
+
+# Leaderboard Commands
+LeaderboardGroup = app_commands.Group(name="leaderboard", description="Leaderboard commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+@LeaderboardGroup.command(description="Retrieve leaderboard stats for a player.")
+async def stats(interaction: Interaction, player_mention: str=""):
+    await leaderboard.retrieve_leaderboard_user_stats(interaction, player_mention)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 tree.add_command(BracketGroup, guild=discord.Object(id=713190806688628786))
 
 tree.add_command(ChallengeGroup, guild=TEST_GUILD)
 tree.add_command(ChallengeGroup, guild=discord.Object(id=713190806688628786))
+
+tree.add_command(LeaderboardGroup, guild=TEST_GUILD)
+tree.add_command(LeaderboardGroup, guild=discord.Object(id=713190806688628786))
 
 bot_client.run(TOKEN)
