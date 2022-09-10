@@ -140,7 +140,7 @@ def create_player_stat_embed(db_user: dict, user: Member):
     embed.set_author(name=f"{user.display_name} | {user.name}#{user.discriminator}", icon_url=user.display_avatar.url)
     embed.add_field(name="Wins", value=f"{wins}")
     embed.add_field(name="Losses", value=f"{losses}")
-    embed.add_field(name="Total Matches", value=f"{total_matches}")
+    embed.add_field(name="Total Challenges", value=f"{total_matches}")
     embed.add_field(name="Win Rate", value=f"{win_rate}")
     embed.set_footer(text=f"beta-bot | GitHub 🤖", icon_url=ICON)
     return embed

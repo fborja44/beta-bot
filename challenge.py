@@ -369,15 +369,20 @@ class accept_view(discord.ui.View):
     async def accept(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
         await accept_challenge(interaction)
 
+    
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, custom_id="cancel_challenge")
+    async def Cancel(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await cancel_challenge(interaction, interaction.message.id)
+
 class voting_buttons_view(discord.ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
-    @discord.ui.button(emoji='1️⃣', style=discord.ButtonStyle.grey, custom_id="join_bracket")
+    @discord.ui.button(emoji='1️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player1")
     async def vote_player1(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
         await vote_challenge_button(interaction, button)
 
-    @discord.ui.button(emoji='2️⃣', style=discord.ButtonStyle.grey, custom_id="leave_bracket")
+    @discord.ui.button(emoji='2️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player2")
     async def vote_player2(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
         await vote_challenge_button(interaction, button)
 
