@@ -128,8 +128,11 @@ async def create(interaction: Interaction, best_of: int = 3, player_mention: str
     await challenge.create_challenge(bot_client, interaction, best_of, player_mention)
 
 @ChallengeGroup.command(description="Cancels a challenge that has not yet been completed.")
-async def cancel(interaction: Interaction, challenge_id: int = None):
-    await challenge.cancel_challenge(interaction, challenge_id)
+async def cancel(interaction: Interaction, challenge_id: str | None = None):
+    if not challenge_id.isnumeric():
+        await interaction.response.send_message("`challenge_id` must be a valid integer.", ephemeral=True)
+        return False
+    await challenge.cancel_challenge(interaction, int(challenge_id))
 
 @ChallengeGroup.command(description="[Privileged] Deletes a challenge.")
 async def delete(interaction: Interaction, challenge_id: str):

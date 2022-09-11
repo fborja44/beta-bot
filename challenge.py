@@ -58,8 +58,8 @@ async def create_challenge(client: Client, interaction: Interaction, best_of: in
     # Parse arguments; default type = Bo3
     # usage = 'Usage: `$challenge create [type]`\nex. $challenge create 3'
     # Check number of rounds
-    if best_of % 2 != 1: # must be odd
-        await interaction.response.send_message("There must be an odd number of rounds.", ephemeral=True)
+    if best_of % 2 != 1 or best_of < 1: # must be odd
+        await interaction.response.send_message("There must be an positive odd number of rounds.", ephemeral=True)
         return False
 
     usage = f'Usage: `/challenge [best_of] @[player_mention] `\nex. `/challenge best_of: 3 player_mention: <@!{client.user.id}>`'
