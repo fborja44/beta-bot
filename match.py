@@ -313,26 +313,21 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     Only usable by bracket creator or bracket manager
     """
     guild: Guild = interaction.guild
-    message: Message = interaction.message
+    channel: TextChannel = interaction.channel
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     usage = "Usage: `$bracket report <match_id> <entrant_name | 1️⃣ | 2️⃣>`"
     # Defer response
     await interaction.response.defer()
-    # if not winner_emote or not message.reference:
-    #     await interaction.followup.send(usage, ephemeral=True)
-    #     return False
     # Fetch active bracket
     db_bracket = _bracket.find_active_bracket(db_guild)
     if not db_bracket:
         await interaction.followup.send(f"There are currently no active brackets.", ephemeral=True)
         return False
-
     # Only allow author or guild admins to manually report results
     if user.id != db_bracket['author']['id'] or not user.guild_permissions.administrator:
         await interaction.followup.send(f"Only the author or server admins can override match results.", ephemeral=True)
         return False
-
     # Check if provided emote
     valid1 = ['1', '1️⃣']
     valid2 = ['2', '2️⃣']
@@ -341,7 +336,6 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
         winner_emote = '1️⃣'
     elif winner in valid2:
         winner_emote = '2️⃣'
-
     # Get match
     try:
         db_match = find_match_by_challonge_id(db_bracket, match_challonge_id)
@@ -350,9 +344,8 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
         await interaction.followup.send(f"Something went wrong when finding the match.", ephemeral=True)
         return False
     if not db_match:
-        await interaction.followup.send(f"Invalid challonge id.\n{usage}", ephemeral=True)
+        await interaction.followup.send(f"Invalid challonge id.", ephemeral=True)
         return False
-
     # Find by name if applicable
     if not winner_emote:
         player1 = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
@@ -362,32 +355,29 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
         elif player2['name'].lower() == winner.lower():
             winner_emote = '2️⃣'
         else:
-            # printlog(f"User ['name'='{entrant_name}']' is not an entrant in match ['id'='{match_id}'].")
             await interaction.followup.send(f"There is no entrant named '{winner}' in this match.\n{usage}", ephemeral=True)
             return False
-
     # Check if actually changing the winner
     if db_match['winner_emote'] is not None and winner_emote == db_match['winner_emote']:
         await interaction.followup.send("Match report failed; Winner is the same.", ephemeral=True)
         return False
-
     # Delete previously created matches
     next_matches = db_match['next_matches']
     if len(next_matches) > 0:
         for next_match_id in next_matches:
             try:
-                await delete_match(message, db_bracket, next_match_id)
+                await delete_match(channel, db_bracket, next_match_id)
             except:
                 print(f"Something went wrong when deleting match ['id'={next_match_id}] while deleting bracket ['name'={db_bracket['title']}].")
-
     # Report match
     match_message = await interaction.channel.fetch_message(db_match['id'])
     try:
         reported_match, winner = await report_match(match_message, db_guild, db_bracket, db_match, winner_emote)
     except Exception as e:
-        printlog("bleh", e)
-    printlog(f"User ['name'='{user.name}'] overwrote match ['id'='{db_match['id']}'] New winner: {winner['name']} {winner_emote}.")
-    await interaction.followup.send(content=f"Match report successful. New winner: {winner['name']} {winner_emote}")
+        printlog(f"Failed to report match ['id'='{db_match['id']}']", e)
+        return False
+    printlog(f"User ['name'='{user.name}'] overwrote result for match ['id'='{db_match['id']}']. Winner: {winner['name']} {winner_emote}.")
+    await interaction.followup.send(content=f"Match report successful. Winner: {winner['name']} {winner_emote}")
     return True
 
 ##################

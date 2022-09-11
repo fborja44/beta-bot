@@ -40,7 +40,7 @@ def find_active_challenge_by_user(db_guild: dict, user_id: int):
     except:
         return None
 
-async def create_challenge(client: Client, interaction: Interaction, best_of: int, player_mention: str):
+async def create_challenge(client: Client, interaction: Interaction, player_mention: str, best_of: int):
     """
     Creates a new challenge match between two players.
     If player_mention is None, waits for a challenger.
@@ -49,7 +49,7 @@ async def create_challenge(client: Client, interaction: Interaction, best_of: in
     guild: Guild = interaction.guild
     player1: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
-    # TODO: Check if already has active challenge
+    # Check if already has active challenge
     active_challenge = find_active_challenge_by_user(db_guild, player1.id)
     if active_challenge:
         await interaction.response.send_message("You already have an active challenge.", ephemeral=True)
@@ -62,7 +62,7 @@ async def create_challenge(client: Client, interaction: Interaction, best_of: in
         await interaction.response.send_message("There must be an positive odd number of rounds.", ephemeral=True)
         return False
 
-    usage = f'Usage: `/challenge [best_of] @[player_mention] `\nex. `/challenge best_of: 3 player_mention: <@!{client.user.id}>`'
+    usage = f'Usage: `/challenge create [best_of] @[player_mention] `\nex. `/challenge create player_mention:` <@!{client.user.id}> `best_of: 3`'
     # Check for metioned user
     if len(player_mention.strip()) > 0:
         matched_id = id_match.search(player_mention)
@@ -273,7 +273,7 @@ async def vote_challenge_button(interaction: Interaction, button: Button):
     # Call main vote_reaction function
     return await _match.vote_button(interaction, button, challenge_message, db_guild, db_challenge)
 
-async def report_challenge(challenge_message: Message, db_guild: dict, db_challenge: dict, winner_emote: str, is_dq: bool=False):
+async def report_challenge(challenge_message: Message, db_guild: dict, db_challenge: dict, winner_emote: str, is_forfeit: bool=False):
     """
     Reports a challenge winner and updates the leaderboard
     """
@@ -294,7 +294,7 @@ async def report_challenge(challenge_message: Message, db_guild: dict, db_challe
     
     # Update challenge embed
     challenge_embed = challenge_message.embeds[0]
-    confirm_embed = _match.edit_match_embed_confirmed(challenge_embed, challenge_id, db_challenge['player1'], db_challenge['player2'], winner_emote, is_dq)
+    confirm_embed = _match.edit_match_embed_confirmed(challenge_embed, challenge_id, db_challenge['player1'], db_challenge['player2'], winner_emote, is_forfeit)
     await challenge_message.edit(embed=confirm_embed, view=None)
     print("Succesfully reported challenge [id={0}]. Winner = '{1}'.".format(challenge_id, winner['name']))
 
@@ -316,6 +316,69 @@ async def report_challenge(challenge_message: Message, db_guild: dict, db_challe
         await _leaderboard.update_leaderboard_user_score(challenge_message.guild.id, db_challenge, user2, winner_emote == '2️⃣')
     return True
 
+async def override_challenge_result(interaction: Interaction, challenge_id: int, winner: str):
+    """
+    Overrides the results of a match. The status of the match does not matter.
+    Only usable by bracket creator or bracket manager
+    """
+    guild: Guild = interaction.guild
+    user: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
+    usage = "Usage: `$challenge report <challenge_id> <entrant_name | 1️⃣ | 2️⃣>`"
+    # Defer response
+    await interaction.response.defer()
+    # Only allow guild admins to manually report results
+    if not user.guild_permissions.administrator:
+        await interaction.followup.send(f"Only the author or server admins can override challenge results.", ephemeral=True)
+        return False
+    # Check if provided emote
+    valid1 = ['1', '1️⃣']
+    valid2 = ['2', '2️⃣']
+    winner_emote = None
+    if winner in valid1:
+        winner_emote = '1️⃣'
+    elif winner in valid2:
+        winner_emote = '2️⃣'
+    # Get challenge
+    try:
+        db_challenge = find_challenge(db_guild, challenge_id)
+    except Exception as e:
+        printlog(f"Failed to find challenge ['id'='{challenge_id}'].", e)
+        await interaction.followup.send(f"Something went wrong when finding the challenge.", ephemeral=True)
+        return False
+    if not db_challenge:
+        await interaction.followup.send(f"Invalid challenge id.", ephemeral=True)
+        return False
+    # Check if challenge has been accepted
+    if not db_challenge['accepted']:
+        await interaction.followup.send(f"This challenge has not been accepted yet.", ephemeral=True)
+        return False
+    # Find by name if applicable
+    if not winner_emote:
+        player1 = db_challenge['player1']['id']
+        player2 = db_challenge['player2']['id']
+        if player1['name'].lower() == winner.lower():
+            winner_emote = '1️⃣'
+        elif player2['name'].lower() == winner.lower():
+            winner_emote = '2️⃣'
+        else:
+            await interaction.followup.send(f"There is no entrant named '{winner}' in this challenge.\n{usage}", ephemeral=True)
+            return False
+    # Check if actually changing the winner
+    if db_challenge['winner_emote'] is not None and winner_emote == db_challenge['winner_emote']:
+        await interaction.followup.send("Challenge report failed; Winner is the same.", ephemeral=True)
+        return False
+    # Report match
+    challenge_message = await interaction.channel.fetch_message(db_challenge['id'])
+    try:
+        await report_challenge(challenge_message, db_guild, db_challenge, winner_emote)
+    except Exception as e:
+        printlog(f"Failed to report match ['id'='{db_challenge['id']}']", e)
+        return False
+    printlog(f"User ['name'='{user.name}'] overwrote result for challenge ['id'='{db_challenge['id']}']. Winner: {winner['name']} {winner_emote}.")
+    await interaction.followup.send(content=f"Challenge report successful. Winner: {winner['name']} {winner_emote}")
+    return True
+
 #######################
 ## MESSAGE FUNCTIONS ##
 #######################
@@ -334,7 +397,7 @@ def create_challenge_embed(db_challenge: dict):
         embed.add_field(name=f"Waiting for Challenger...", value=f'1️⃣ <@{player1_id}> vs ??? 2️⃣', inline=False)
     else:
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
-    embed.set_footer(text=f"Created by {player1_name}.")
+    embed.set_footer(text=f"Created by {player1_name}\nchallenge_id: {db_challenge['id']}.")
     return embed
 
 def edit_challenge_embed_start(db_challenge: dict, embed: Embed):

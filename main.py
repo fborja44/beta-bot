@@ -113,7 +113,7 @@ async def finalize(interaction: Interaction, bracket_title: str=""):
 async def results(interaction: Interaction, bracket_title: str=""):
     await bracket.send_results(interaction, bracket_title)
 
-@BracketGroup.command(description="Manually reports the score for a tournament bracket match.")
+@BracketGroup.command(description="Manually reports the result for a tournament bracket match.")
 async def report(interaction: Interaction, match_challonge_id: int, winner: str):
     await match.override_match_result(interaction, match_challonge_id, winner)
 
@@ -124,8 +124,16 @@ async def disqualify(interaction: Interaction, entrant_name: str, bracket_title:
 # Challenge Commands
 ChallengeGroup = app_commands.Group(name="challenge", description="Challenge commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
 @ChallengeGroup.command(description="Creates a challenge.")
-async def create(interaction: Interaction, best_of: int = 3, player_mention: str = ""):
-    await challenge.create_challenge(bot_client, interaction, best_of, player_mention)
+async def create(interaction: Interaction, player_mention: str = "", best_of: int = 3):
+    await challenge.create_challenge(bot_client, interaction, player_mention, best_of)
+
+@ChallengeGroup.command(description="Creates a direct challenge to the mentioned player.")
+async def player(interaction: Interaction, player_mention: str, best_of: int = 3):
+    await challenge.create_challenge(bot_client, interaction, player_mention, best_of)
+
+@ChallengeGroup.command(description="Creates a queued challenge.")
+async def search(interaction: Interaction, best_of: int = 3):
+    await challenge.create_challenge(bot_client, interaction, "", best_of)
 
 @ChallengeGroup.command(description="Cancels a challenge that has not yet been completed.")
 async def cancel(interaction: Interaction, challenge_id: str | None = None):
@@ -140,6 +148,13 @@ async def delete(interaction: Interaction, challenge_id: str):
         await interaction.response.send_message("`challenge_id` must be a valid integer.", ephemeral=True)
         return False
     await challenge.cancel_challenge(interaction, int(challenge_id), delete=True)
+
+@ChallengeGroup.command(description="[Privileged] Manually reports the result for a challenge..")
+async def report(interaction: Interaction, challenge_id: str, winner: str):
+    if not challenge_id.isnumeric():
+        await interaction.response.send_message("`challenge_id` must be a valid integer.", ephemeral=True)
+        return False
+    await challenge.override_challenge_result(interaction, int(challenge_id), winner)
 
 # Leaderboard Commands
 LeaderboardGroup = app_commands.Group(name="leaderboard", description="Leaderboard commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
