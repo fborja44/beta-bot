@@ -1,17 +1,13 @@
-from common import MATCHES, ICON
-from datetime import datetime, timedelta, date
-from discord import Button, Client, Embed, Guild, Interaction, Member, Message, RawReactionActionEvent, Reaction, TextChannel, User
-from gridfs import Database
-from logger import printlog
+from utils.common import MATCHES, ICON
+from datetime import datetime
+from discord import Button, Embed, Guild, Interaction, Member, Message, TextChannel, User
+from utils.logger import printlog
 from pprint import pprint
-import asyncio
-import bracket as _bracket
-import challenge as _challenge
+import tournaments.bracket as _bracket
+import tournaments.challenge as _challenge
 import challonge
 import discord
-import guild as _guild
-import mdb
-import re
+import guilds.guild as _guild
 
 # match.py
 # Bracket matches

@@ -1,18 +1,10 @@
-from common import CHALLENGES, GUILDS, ICON
-from datetime import datetime, timedelta, date
-from discord import Client, Embed, Guild, Interaction, Member, Message, RawReactionActionEvent, Reaction, TextChannel, User
-from gridfs import Database
-from logger import printlog
+from utils.common import GUILDS, ICON
+from discord import Embed, Guild, Interaction, Member, Message, TextChannel, User
+from utils.logger import printlog
 from pprint import pprint
-import asyncio
-import bracket as _bracket
-import challenge as _challenge
-import discord
-import guild as _guild
-import match as _match
-import challonge
-import mdb
-import re
+import tournaments.challenge as _challenge
+import guilds.guild as _guild
+import utils.mdb as mdb
 
 # leaderboard.py
 # leaderboard for 1v1 challenges
@@ -47,6 +39,10 @@ async def retrieve_leaderboard(interaction: Interaction):
     guild: Guild = interaction.guild
     db_guild: dict = await _guild.find_guild(guild.id)
     db_leaderboard: dict = db_guild['leaderboard']
+    leaderboard_embed = create_server_leaderboard_embed(guild, db_leaderboard)
+    await interaction.channel.send(embed=leaderboard_embed)
+    await interaction.response.send_message(f"Found leaderboard for server '***{guild.name}***'!", ephemeral=True)
+    return True
 
 async def retrieve_leaderboard_user_stats(interaction: Interaction, player_mention: str):
     """
@@ -131,12 +127,20 @@ async def update_leaderboard_user_score(guild_id: int, db_challenge: dict, db_us
 ## MESSAGE FUNCTIONS ##
 #######################
 
+def create_server_leaderboard_embed(guild: Guild, db_leaderboard):
+    embed = Embed(title=f"Server Challenge Leaderboard", color=0xFAD25A)
+    embed.set_author(name=guild.name, icon_url=guild.icon.url)
+    embed.add_field(name="Player", value="1. Zain")
+    embed.add_field(name="Rating", value="1200")
+    embed.set_footer(text=f"beta-bot | GitHub 🤖", icon_url=ICON)
+    return embed
+
 def create_player_stat_embed(db_user: dict, user: Member):
     total_matches = len(db_user['matches'])
     wins = db_user['wins']
     losses = db_user['losses']
     win_rate = "{0:.2%}".format(wins / total_matches)
-    embed = Embed(title=f"📈 Leaderboard Player Stats", description=f"Stats for: <@!{db_user['id']}>", color=0xFAD25A)
+    embed = Embed(title=f"📈  Leaderboard Player Stats", description=f"Stats for: <@!{db_user['id']}>", color=0xFAD25A)
     embed.set_author(name=f"{user.display_name} | {user.name}#{user.discriminator}", icon_url=user.display_avatar.url)
     embed.add_field(name="Wins", value=f"{wins}")
     embed.add_field(name="Losses", value=f"{losses}")

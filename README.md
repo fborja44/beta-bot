@@ -3,11 +3,14 @@
 
 Brackets are generated using the [Challonge.com API](https://api.challonge.com/v1). Bracket images are created and hosted on imgur using the [Imgur API](https://apidocs.imgur.com/).
 
+All data is stored using MongoDB through the [PyMongo](https://pymongo.readthedocs.io/en/stable/) library.
+
 ## Links
 - Challonge.com API: https://api.challonge.com/v1
 - Discord API: https://discord.com/developers/docs/intro
 - discord.py: https://discordpy.readthedocs.io/en/stable/
 - Imgur API: https://apidocs.imgur.com/
+- PyMongo: https://pymongo.readthedocs.io/en/stable/
 
 ## Commands
 All commands use the `/` prefix and `/slash command` feature of Discord for help with validation, error handling, and parameter autofill/documentation.

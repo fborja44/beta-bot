@@ -1,8 +1,6 @@
-from discord import Client, Embed, Guild, Message, RawReactionActionEvent, Reaction, TextChannel, User
-from gridfs import Database
+from discord import Guild
 from pprint import pprint
-import mdb
-import uuid
+import utils.mdb as mdb
 
 # guild.py
 # Discord guilds used by the bot
@@ -49,7 +47,7 @@ async def add_guild(guild: Guild):
         # "commands": [],
         # "favorites": [],
         "leaderboard": [],
-        "users": []
+        # "users": []
     }
 
     # Add to database

@@ -1,4 +1,3 @@
-from discord import Member
 from dotenv import load_dotenv
 import os
 

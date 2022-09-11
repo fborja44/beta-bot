@@ -1,20 +1,19 @@
 from discord import app_commands, Guild, Member, Message, Interaction
 from colorama import Fore, Back, Style
-from common import CHALLONGE_USER, CHALLONGE_KEY, MONGO_ADDR, MAX_ENTRANTS, TOKEN
+from utils.common import CHALLONGE_USER, CHALLONGE_KEY, MONGO_ADDR, MAX_ENTRANTS, TOKEN
 from dotenv import load_dotenv
 from pprint import pprint
 from pydoc import describe
 from pymongo import MongoClient
-import bracket
-import challenge
+import tournaments.bracket as bracket
+import tournaments.challenge as challenge
+import tournaments.leaderboard as leaderboard
+import tournaments.match as match
 import challonge
 import discord
-import guild as _guild
-import leaderboard
+import guilds.guild as _guild
 import logging
-import logger
-import match
-import os
+import utils.logger as logger
 
 # main.py
 # beta-bot program
@@ -29,7 +28,7 @@ print(Fore.MAGENTA + "============================================" + Style.RESE
 # Add logs to discord.log
 discord_logger = logging.getLogger('discord')
 discord_logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
+handler = logging.FileHandler(filename='logs/discord.log', encoding='utf-8', mode='w')
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 discord_logger.addHandler(handler)
 
@@ -158,9 +157,13 @@ async def report(interaction: Interaction, challenge_id: str, winner: str):
 
 # Leaderboard Commands
 LeaderboardGroup = app_commands.Group(name="leaderboard", description="Leaderboard commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
-@LeaderboardGroup.command(description="Retrieve leaderboard stats for a player.")
-async def stats(interaction: Interaction, player_mention: str=""):
+@LeaderboardGroup.command(description="Retrieves the leaderboard stats for a player.")
+async def player(interaction: Interaction, player_mention: str=""):
     await leaderboard.retrieve_leaderboard_user_stats(interaction, player_mention)
+
+@LeaderboardGroup.command(description="Retrieves the leaderboard for the current server.")
+async def server(interaction: Interaction):
+    await leaderboard.retrieve_leaderboard(interaction)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 tree.add_command(BracketGroup, guild=discord.Object(id=713190806688628786))

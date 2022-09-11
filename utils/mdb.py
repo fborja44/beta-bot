@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
-from gridfs import Database
-from logger import printlog
+from utils.logger import printlog
 from pprint import pprint
 from pymongo import MongoClient, ReturnDocument, DESCENDING
 import os

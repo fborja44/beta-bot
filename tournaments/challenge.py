@@ -1,15 +1,13 @@
-from common import CHALLENGES, GUILDS, ICON
-from datetime import datetime, timedelta, date
-from discord import Button, Client, Embed, Guild, Interaction, Member, Message, RawReactionActionEvent, Reaction, TextChannel, User
-from gridfs import Database
-from logger import printlog
+from utils.common import CHALLENGES, GUILDS, ICON
+from datetime import datetime
+from discord import Button, Client, Embed, Guild, Interaction, Member, Message, TextChannel, User
+from utils.logger import printlog
 from pprint import pprint
-import bracket as _bracket
-import guild as _guild
+import guilds.guild as _guild
 import discord
-import leaderboard as _leaderboard
-import match as _match
-import mdb
+import tournaments.leaderboard as _leaderboard
+import tournaments.match as _match
+import utils.mdb as mdb
 import re
 
 # challenge.py

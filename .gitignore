@@ -152,4 +152,5 @@ cython_debug/
 #.idea/
 
 # Testing
+/logs
 test.py

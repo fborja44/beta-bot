@@ -1,17 +1,16 @@
 from cgi import print_exception
-from common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
+from utils.common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
 from datetime import datetime, timedelta, date
-from discord import Client, Embed, Guild, Interaction, Message, Member, RawReactionActionEvent, TextChannel
+from discord import Embed, Guild, Interaction, Message, Member, TextChannel
 from dotenv import load_dotenv
-from gridfs import Database
-from logger import printlog, printlog_msg
+from utils.logger import printlog, printlog_msg
 from pprint import pprint
 from traceback import print_exception
 import challonge
 import discord
-import guild as _guild
-import match as _match
-import mdb
+import guilds.guild as _guild
+import tournaments.match as _match
+import utils.mdb as mdb
 import os
 import re
 import requests
