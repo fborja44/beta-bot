@@ -68,10 +68,6 @@ async def retrieve_leaderboard_user_stats(interaction: Interaction, player_menti
         await interaction.followup.send(f"User <@!{user.id}> has no record in the leaderboard.", ephemeral=True)
         return False
     # Send stats of user
-    total_matches = len(db_user['matches'])
-    wins = db_user['wins']
-    losses = db_user['losses']
-    win_rate = "{0:.2%}".format(wins / total_matches)
     stat_embed = create_player_stat_embed(db_user, user)
     await interaction.channel.send(embed=stat_embed)
     await interaction.followup.send(f"Found stats for user <@!{user.id}>!", ephemeral=True)

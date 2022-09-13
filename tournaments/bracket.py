@@ -12,6 +12,7 @@ import guilds.guild as _guild
 import tournaments.match as _match
 import utils.mdb as mdb
 import os
+import pytz
 import re
 import requests
 
@@ -136,9 +137,9 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
             'entrants': [], 
             'max_entrants': max_entrants,
             'matches': [],
-            'created_at': datetime.now(),
-            'starttime': parsed_time, 
-            'endtime': None, 
+            'created_at': datetime.now(tz=pytz.timezone('US/Eastern')),
+            'start_time': parsed_time, 
+            'end_time': None, 
             'completed': False,
             'open': True,
             'num_rounds': None
@@ -262,7 +263,7 @@ async def update_bracket(interaction: Interaction, bracket_title: str , new_brac
         db_bracket['title'] = new_bracket_title
     # Updating time
     if time is not None:
-        db_bracket['starttime'] = parse_time(time)
+        db_bracket['start_time'] = parse_time(time)
     # Updating type
     if single_elim is not None:
         db_bracket['tournament_type'] = "single elimination" if single_elim else "double elimination"
@@ -276,7 +277,7 @@ async def update_bracket(interaction: Interaction, bracket_title: str , new_brac
     challonge.tournaments.update(db_bracket['challonge']['id'], 
         name=db_bracket['title'], 
         tournament_type=db_bracket['tournament_type'],
-        start_at=db_bracket['starttime'], 
+        start_at=db_bracket['start_time'], 
         signup_cap=max_entrants,
     )
     # Update the bracket in database
@@ -413,7 +414,7 @@ async def finalize_bracket(interaction: Interaction, bracket_title: str):
     db_guild = await _guild.find_guild(guild.id)
     # Fetch bracket
     # usage = 'Usage: `$bracket finalize [title]`'
-    completed_time = datetime.now()
+    completed_time = datetime.now(tz=pytz.timezone('US/Eastern'))
     db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title, active=True)
     if not db_bracket:
         return False
@@ -821,9 +822,9 @@ def parse_time(string: str):
     text_match1 = time_re_long.search(string.strip()) # Check for long time
     text_match2 = time_re_short.search(string.strip()) # Check for short time
     if not text_match1 and not text_match2:
-        time = datetime.now() + timedelta(hours=1)
+        time = datetime.now(tz=pytz.timezone('US/Eastern')) + timedelta(hours=1)
     else:
-        current_time = datetime.now()
+        current_time = datetime.now(tz=pytz.timezone('US/Eastern'))
         if text_match1:
             time = datetime.strptime(f'{date.today()} {text_match1.group()}', '%Y-%m-%d %I:%M %p')
         elif text_match2:
@@ -843,7 +844,7 @@ def create_bracket_embed(db_bracket: dict, author: Member):
     """
     bracket_title = db_bracket['title']
     challonge_url = db_bracket['challonge']['url']
-    time = db_bracket['starttime']
+    time = db_bracket['start_time']
     
     # Check the status
     if db_bracket['completed']:

@@ -7,6 +7,7 @@ import tournaments.bracket as _bracket
 import tournaments.challenge as _challenge
 import challonge
 import discord
+import pytz
 import guilds.guild as _guild
 
 # match.py
@@ -57,6 +58,7 @@ async def create_match(channel: TextChannel, guild: Guild, db_bracket: dict, cha
             'vote': None
             },
         "round": challonge_match['round'],
+        "opened_at": datetime.now(tz=pytz.timezone('US/Eastern')),
         'completed': False,
         "winner_emote": None,
         "next_matches" : []
@@ -247,7 +249,7 @@ async def report_match(match_message: Message, db_guild: dict, db_bracket: dict,
         return None, None
     # Update status in db
     try:
-        db_match.update({'completed': datetime.now(), 'winner_emote': winner_emote})
+        db_match.update({'completed': datetime.now(tz=pytz.timezone('US/Eastern')), 'winner_emote': winner_emote})
         await set_match(db_guild['guild_id'], db_bracket, db_match)
     except Exception as e:
         printlog(f"Failed to report match ['id'={match_id}] in database.", e)
@@ -432,7 +434,7 @@ def create_match_embed(db_bracket: dict, db_match: dict):
     round = db_match['round']
     player1_id = db_match['player1']['id']
     player2_id = db_match['player2']['id']
-    time = datetime.now().strftime("%#I:%M %p %Z")
+    time = datetime.now(tz=pytz.timezone('US/Eastern')).strftime("%#I:%M %p %Z")
     round_name = get_round_name(db_bracket, match_challonge_id, round)
     embed = Embed(title=f"⚔️ {round_name}", description=f"Awaiting result...\nOpened at {time}", color=0x50C878)
     embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
@@ -460,7 +462,7 @@ def edit_match_embed_confirmed(embed: Embed, match_id: int, player1: dict, playe
     For tournament bracket matches, match_id is the challonge_id.
     For 1v1 challenge matches, match_id is the id (message_id).
     """
-    time = datetime.now().strftime("%#I:%M %p %Z")
+    time = datetime.now(tz=pytz.timezone('US/Eastern')).strftime("%#I:%M %p %Z")
     player1_id = player1['id']
     player2_id = player2['id']
 

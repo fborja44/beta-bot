@@ -84,7 +84,7 @@ async def test(interaction: Interaction, num_entrants: int = 4):
     await interaction.response.defer(ephemeral=True)
     await bracket.create_test_bracket(interaction, num_entrants)
 
-@BracketGroup.command(description="Creates a tournament bracket. Default: double elimination")
+@BracketGroup.command(description="Creates a tournament bracket. Times in ET. Default: double elimination.")
 async def create(interaction: Interaction, bracket_title: str, time: str="", single_elim: bool = False, max_entrants: int = MAX_ENTRANTS):
     await interaction.response.defer(ephemeral=True)
     await bracket.create_bracket(interaction, bracket_title, time, single_elim, max_entrants)
@@ -94,7 +94,7 @@ async def delete(interaction: Interaction, bracket_title: str=""):
     await interaction.response.defer(ephemeral=True)
     await bracket.delete_bracket(interaction, bracket_title)
 
-@BracketGroup.command(description="Updates a tournament bracket.")
+@BracketGroup.command(description="Updates a tournament bracket. Times in ET.")
 async def update(interaction: Interaction, bracket_title: str, new_bracket_title: str | None = None, time: str | None = None, 
                     single_elim: bool | None = None, max_entrants: int | None = None):
     await interaction.response.defer(ephemeral=True)

@@ -5,6 +5,7 @@ from utils.logger import printlog
 from pprint import pprint
 import guilds.guild as _guild
 import discord
+import pytz
 import tournaments.leaderboard as _leaderboard
 import tournaments.match as _match
 import utils.mdb as mdb
@@ -236,7 +237,7 @@ async def accept_challenge(interaction: Interaction):
         }
     
     # Set to closed
-    db_challenge.update({'open': False, 'accepted': True})
+    db_challenge.update({'open': False, 'accepted': datetime.now(tz=pytz.timezone('US/Eastern'))})
     # Update challenge in databse
     result = await set_challenge(guild.id, challenge_message.id, db_challenge)
     if not result:
@@ -284,7 +285,7 @@ async def report_challenge(challenge_message: Message, db_guild: dict, db_challe
 
     # Update status in db
     try:
-        db_challenge.update({'completed': datetime.now(), 'winner_emote': winner_emote})
+        db_challenge.update({'completed': datetime.now(tz=pytz.timezone('US/Eastern')), 'winner_emote': winner_emote})
         await set_challenge(db_guild['guild_id'], challenge_id, db_challenge)
     except Exception as e:
         printlog(f"Failed to report challenge ['id'={challenge_id}] in database.", e)
@@ -386,7 +387,7 @@ def create_challenge_embed(db_challenge: dict):
     player1_id = db_challenge['player1']['id']
     player1_name = db_challenge['player1']['name']
     player2_id = db_challenge['player2']['id']
-    # time = datetime.now().strftime("%#I:%M %p")
+    # time = datetime.now(tz=pytz.timezone('US/Eastern')).strftime("%#I:%M %p")
     embed = Embed(title=f"⚔️  Challenge - Best of {db_challenge['best_of']}", description=f"{player1_name} has issued a challenge!", color=0x56A1E3)
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     if not player2_id:
