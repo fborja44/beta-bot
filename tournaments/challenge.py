@@ -109,7 +109,6 @@ async def create_challenge(client: Client, interaction: Interaction, player_ment
 
     # Add challenge to database
     try:
-        pprint(new_challenge)
         new_challenge['id'] = challenge_message.id
         await _guild.push_to_guild(guild, CHALLENGES, new_challenge)
     except Exception as e:
@@ -245,7 +244,7 @@ async def accept_challenge(interaction: Interaction):
         return False
     print(f"User ['name'='{user.name}'] accepted challenge ['id'='{db_challenge['id']}'] by '{db_challenge['player1']['name']}'.")
     # Update message embed and buttons
-    updated_embed = edit_challenge_embed_start(db_challenge, challenge_message.embeds[0])
+    updated_embed = edit_challenge_embed_start(challenge_message.embeds[0], db_challenge)
     await challenge_message.edit(embed=updated_embed, view=voting_buttons_view())
     await interaction.followup.send(f"You have accepted the challenge by <@{db_challenge['player1']['id']}>!", ephemeral=True)
     return True
@@ -294,6 +293,7 @@ async def report_challenge(challenge_message: Message, db_guild: dict, db_challe
     # Update challenge embed
     challenge_embed = challenge_message.embeds[0]
     confirm_embed = _match.edit_match_embed_confirmed(challenge_embed, challenge_id, db_challenge['player1'], db_challenge['player2'], winner_emote, is_forfeit)
+    confirm_embed.remove_field(1) # Remove votes field
     await challenge_message.edit(embed=confirm_embed, view=None)
     print("Succesfully reported challenge [id={0}]. Winner = '{1}'.".format(challenge_id, winner['name']))
 
@@ -387,25 +387,33 @@ def create_challenge_embed(db_challenge: dict):
     player1_id = db_challenge['player1']['id']
     player1_name = db_challenge['player1']['name']
     player2_id = db_challenge['player2']['id']
-    # time = datetime.now(tz=pytz.timezone('US/Eastern')).strftime("%#I:%M %p")
+    # Main embed
     embed = Embed(title=f"⚔️  Challenge - Best of {db_challenge['best_of']}", description=f"{player1_name} has issued a challenge!", color=0x56A1E3)
+    # Author field
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    # Challenge info field
     if not player2_id:
         embed.add_field(name=f"Waiting for Challenger...", value=f'1️⃣ <@{player1_id}> vs ??? 2️⃣', inline=False)
     else:
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
+    # Challenge footer
     embed.set_footer(text=f"Created by {player1_name}\nchallenge_id: {db_challenge['id']}.")
     return embed
 
-def edit_challenge_embed_start(db_challenge: dict, embed: Embed):
+def edit_challenge_embed_start(embed: Embed, db_challenge: dict):
     """
     Edits an embed object for a challenge that has been started.
     """
     player1_id = db_challenge['player1']['id']
     player2_id = db_challenge['player2']['id']
+    player1_vote = db_challenge['player1']['vote']
+    player2_vote = db_challenge['player2']['vote']
     embed.color = 0x50C878
+    # Update fields for live match
     embed.description += "\nAwaiting result..."
     embed.set_field_at(0, name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
+    # Challenge votes
+    embed.add_field(name=f"Results Reporting", value=f'<@{player1_id}>: *{player1_vote}*\n<@{player2_id}>: *{player2_vote}*', inline=False)
     embed.set_footer(text=f"\nPlayers react with 1️⃣ or 2️⃣ to report the winner.\nmatch_id: {db_challenge['id']}")
     return embed
 

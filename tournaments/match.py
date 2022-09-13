@@ -151,6 +151,8 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
     if db_match['completed']:
         await interaction.followup.send(f"Vote failed. This match has already been completed.", ephemeral=True)
         return False
+    # Check if switching vote
+    switched = voter['vote'] is not None and voter['vote'] != button.emoji.name
     # Record vote or remove vote
     if voter['vote'] != button.emoji.name:
         vote = button.emoji.name
@@ -186,6 +188,10 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
         await interaction.followup.send(f"Something went wrong while voting for {vote}.", ephemeral=True)
         return False
 
+    # Update embed with vote
+    match_embed = edit_match_embed_report(match_embed, db_match)
+    await match_message.edit(embed=match_embed)
+
     # Check if both players voted
     if player1['vote'] and player2['vote']:
         # Check who they voted for
@@ -204,7 +210,10 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
                 dispute_embed = _challenge.edit_challenge_embed_dispute(match_embed)
             await match_message.edit(embed=dispute_embed)
     if vote:
-        await interaction.followup.send(f"Successfully voted for {vote}.", ephemeral=True)
+        if switched: 
+            await interaction.followup.send(f"Successfully switched vote to {vote}.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Successfully voted for {vote}.", ephemeral=True)
     else:
         await interaction.followup.send(f"Successfully removed vote.", ephemeral=True)
     return True
@@ -260,6 +269,7 @@ async def report_match(match_message: Message, db_guild: dict, db_bracket: dict,
     entrant1 = _bracket.find_entrant(db_bracket, db_match['player1']['id'])
     entrant2 = _bracket.find_entrant(db_bracket, db_match['player2']['id'])
     confirm_embed = edit_match_embed_confirmed(match_embed, match_challonge_id, entrant1, entrant2, winner_emote, is_dq)
+    confirm_embed.remove_field(1) # Remove votes field
     await match_message.edit(embed=confirm_embed, view=None)
     print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
 
@@ -434,18 +444,36 @@ def create_match_embed(db_bracket: dict, db_match: dict):
     round = db_match['round']
     player1_id = db_match['player1']['id']
     player2_id = db_match['player2']['id']
+    player1_vote = db_match['player1']['vote']
+    player2_vote = db_match['player2']['vote']
     time = datetime.now(tz=pytz.timezone('US/Eastern')).strftime("%#I:%M %p %Z")
     round_name = get_round_name(db_bracket, match_challonge_id, round)
+    # Main embed
     embed = Embed(title=f"⚔️ {round_name}", description=f"Awaiting result...\nOpened at {time}", color=0x50C878)
+    # Author field
     embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
+    # Match info field
     if round_name == "Grand Finals Set 1":
         embed.add_field(name=f"Players", value=f'1️⃣ [W] <@{player1_id}> vs <@{player2_id}> [L] 2️⃣', inline=False)
     elif round_name == "Grand Finals Set 2":
         embed.add_field(name=f"Players", value=f'1️⃣ [L] <@{player1_id}> vs <@{player2_id}> [L] 2️⃣', inline=False)
     else: 
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
-    # embed.add_field(name=f'Bracket Link', value=url, inline=False)
+    # Match votes
+    embed.add_field(name=f"Results Reporting", value=f'<@{player1_id}>: *{player1_vote}*\n<@{player2_id}>: *{player2_vote}*', inline=False)
+    # Match footer
     embed.set_footer(text=f"Players vote with 1️⃣ or 2️⃣ to report the winner.\nmatch_id: {match_challonge_id}")
+    return embed
+
+def edit_match_embed_report(embed: Embed, db_match: dict):
+    """
+    Updates embed object for disputes.
+    """
+    player1_id = db_match['player1']['id']
+    player2_id = db_match['player2']['id']
+    player1_vote = db_match['player1']['vote']
+    player2_vote = db_match['player2']['vote']
+    embed.set_field_at(1, name=f"Results Reporting", value=f'<@{player1_id}>: *{player1_vote}*\n<@{player2_id}>: *{player2_vote}*', inline=False)
     return embed
 
 def edit_match_embed_dispute(embed: Embed):
@@ -478,7 +506,7 @@ def edit_match_embed_confirmed(embed: Embed, match_id: int, player1: dict, playe
     embed.set_field_at(index=0, name=f"Players", value=f'{player1_emote} <@{player1_id}> vs <@{player2_id}> {player2_emote}', inline=False)
     if len(embed.fields) > 1:
         # Remove dispute field
-        embed.remove_field(1)
+        embed.remove_field(2)
     embed.set_footer(text=f"Result finalized. To change result, contact a bracket manager.\nmatch_id: {match_id}")
     embed.color = 0x000000
     return embed

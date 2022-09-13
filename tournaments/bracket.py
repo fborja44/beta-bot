@@ -853,8 +853,11 @@ def create_bracket_embed(db_bracket: dict, author: Member):
         status = "🚨 Open for Registration 🚨"
     else:
         status = "Started 🟩"
+    # Main embed
     embed = Embed(title=f'🥊  {bracket_title}', description=f"Status: {status}", color=0x6A0DAD)
+    # Author field
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    # Tournament description fields
     embed.add_field(name='Tournament Type', value=db_bracket['tournament_type'].title(), inline=False)
     time_str = time.strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
     embed.add_field(name='Starting At', value=time_str, inline=False)
@@ -865,7 +868,9 @@ def create_bracket_embed(db_bracket: dict, author: Member):
         max_entrants = db_bracket['max_entrants']
         embed.add_field(name=f'Entrants (0/{max_entrants})', value="> *None*", inline=False)
     embed = update_embed_entrants(db_bracket, embed)
+    # Bracket link
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
+    # Set footer
     embed.set_footer(text=f'Created by {author.display_name} | {author.name}#{author.discriminator}.', icon_url=db_bracket['author']['avatar_url'])
     return embed
 
