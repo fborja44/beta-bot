@@ -50,14 +50,14 @@ async def create_challenge(client: Client, interaction: Interaction, player_ment
     # Check if already has active challenge
     active_challenge = find_active_challenge_by_user(db_guild, player1.id)
     if active_challenge:
-        await interaction.response.send_message("You already have an active challenge.", ephemeral=True)
+        await interaction.followup.send("You already have an active challenge.", ephemeral=True)
         return False
 
     # Parse arguments; default type = Bo3
     # usage = 'Usage: `$challenge create [type]`\nex. $challenge create 3'
     # Check number of rounds
     if best_of % 2 != 1 or best_of < 1: # must be odd
-        await interaction.response.send_message("There must be an positive odd number of rounds.", ephemeral=True)
+        await interaction.followup.send("There must be an positive odd number of rounds.", ephemeral=True)
         return False
 
     usage = f'Usage: `/challenge create [best_of] @[player_mention] `\nex. `/challenge create player_mention:` <@!{client.user.id}> `best_of: 3`'
@@ -67,7 +67,7 @@ async def create_challenge(client: Client, interaction: Interaction, player_ment
         if matched_id:
             player2: Member = await guild.fetch_member(int(player_mention[3:-1]))
         else:
-            await interaction.response.send_message(f"Invalid player mention.\n{usage}", ephemeral=True)
+            await interaction.followup.send(f"Invalid player mention.\n{usage}", ephemeral=True)
             return False
     else:
         player2: Member = None
@@ -116,7 +116,7 @@ async def create_challenge(client: Client, interaction: Interaction, player_ment
         if challenge_message: await challenge_message.delete()
         return None
     print(f"User '{player1.name}' ['id'='{player1.id}'] created new challenge ['id'='{new_challenge['id']}'].")
-    await interaction.response.send_message(f"Successfully created new challenge.", ephemeral=True)
+    await interaction.followup.send(f"Successfully created new challenge.", ephemeral=True)
     return new_challenge
 
 async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: bool=False):
@@ -136,20 +136,20 @@ async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: 
     # Cancel or Delete
     if not delete:
         if user.id != db_challenge['player1']['id'] or not user.guild_permissions.administrator:
-            await interaction.response.send_message(f"Only the author or server admins can cancel challenges.", ephemeral=True)
+            await interaction.followup.send(f"Only the author or server admins can cancel challenges.", ephemeral=True)
             return False
     else:
         if not user.guild_permissions.administrator:
-            await interaction.response.send_message(f"Only server admins can delete completed challenges.", ephemeral=True)
+            await interaction.followup.send(f"Only server admins can delete completed challenges.", ephemeral=True)
             return False
     # Check if in channel challenge was created in
     if db_challenge['channel_id'] != channel.id:
-        await interaction.response.send_message(f"Must be in the channel that the challenge was created in: <#{db_challenge['channel_id']}>", ephemeral=True)
+        await interaction.followup.send(f"Must be in the channel that the challenge was created in: <#{db_challenge['channel_id']}>", ephemeral=True)
         return False
     # Only cancel if not open
     if not delete:
         if db_challenge['accepted'] or db_challenge['completed']:
-            await interaction.response.send_message(f"You may not cancel challenges that are in progress or completed.", ephemeral=True)
+            await interaction.followup.send(f"You may not cancel challenges that are in progress or completed.", ephemeral=True)
             return False
 
     # Delete challenge message
@@ -165,7 +165,7 @@ async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: 
         print(f"Something went wrong when deleting challenge ['id'={challenge_id}].")
         return False
     print(f"User '{user.name}' [id={user.id}] cancelled/deleted challenge ['id'='{challenge_id}'].")
-    await interaction.response.send_message("Challenge has been successfully cancelled.", ephemeral=True)
+    await interaction.followup.send("Challenge has been successfully cancelled.", ephemeral=True)
     
     # Update leaderboard if deleting a completed match
     if delete and db_challenge['completed']:
@@ -205,27 +205,27 @@ async def accept_challenge(interaction: Interaction):
         return False
     # Check if user created the challenge
     if db_challenge['player1']['id'] == user.id:
-        await interaction.response.send_message("You cannot accept your own challenge.", ephemeral=True)
+        await interaction.followup.send("You cannot accept your own challenge.", ephemeral=True)
         return False
     # Check if completed
     if db_challenge['completed']:
-        await interaction.response.send_message("This challenge has already been completed.", ephemeral=True)
+        await interaction.followup.send("This challenge has already been completed.", ephemeral=True)
         return False
     # Check if direct challenge
     if db_challenge['player2']['id'] is not None: # Direct challenge
         # Check if member reacting is the person being challenged
         if db_challenge['player2']['id'] != user.id:
-            await interaction.response.send_message("You are not the user being challenged.", ephemeral=True)
+            await interaction.followup.send("You are not the user being challenged.", ephemeral=True)
             return False
     else: # Queuing for challenge
         # Check if accepted
         if db_challenge['accepted']:
-            await interaction.response.send_message("This challenge has already been accepted.", ephemeral=True)
+            await interaction.followup.send("This challenge has already been accepted.", ephemeral=True)
             return False
 
         # Check if open
         if not db_challenge['open']:
-            await interaction.response.send_message("This challenge is currently not open.", ephemeral=True)
+            await interaction.followup.send("This challenge is currently not open.", ephemeral=True)
             return False
 
         # Add user to challenge
@@ -246,7 +246,7 @@ async def accept_challenge(interaction: Interaction):
     # Update message embed and buttons
     updated_embed = edit_challenge_embed_start(db_challenge, challenge_message.embeds[0])
     await challenge_message.edit(embed=updated_embed, view=voting_buttons_view())
-    await interaction.response.send_message(f"You have accepted the challenge by <@{db_challenge['player1']['id']}>!", ephemeral=True)
+    await interaction.followup.send(f"You have accepted the challenge by <@{db_challenge['player1']['id']}>!", ephemeral=True)
     return True
 
 async def vote_challenge_button(interaction: Interaction, button: Button):
@@ -323,8 +323,6 @@ async def override_challenge_result(interaction: Interaction, challenge_id: int,
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     usage = "Usage: `$challenge report <challenge_id> <entrant_name | 1️⃣ | 2️⃣>`"
-    # Defer response
-    await interaction.response.defer()
     # Only allow guild admins to manually report results
     if not user.guild_permissions.administrator:
         await interaction.followup.send(f"Only the author or server admins can override challenge results.", ephemeral=True)
@@ -428,11 +426,13 @@ class accept_view(discord.ui.View):
 
     @discord.ui.button(label="Accept", emoji='🥊', style=discord.ButtonStyle.green, custom_id="accept_challenge")
     async def accept(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         await accept_challenge(interaction)
 
     
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, custom_id="cancel_challenge")
     async def Cancel(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         await cancel_challenge(interaction, interaction.message.id)
 
 class voting_buttons_view(discord.ui.View):
@@ -441,10 +441,12 @@ class voting_buttons_view(discord.ui.View):
 
     @discord.ui.button(emoji='1️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player1")
     async def vote_player1(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         await vote_challenge_button(interaction, button)
 
     @discord.ui.button(emoji='2️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player2")
     async def vote_player2(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         await vote_challenge_button(interaction, button)
 
 ######################
@@ -461,14 +463,14 @@ async def retrieve_valid_challenge(interaction: Interaction, db_guild: dict, cha
         db_challenge = find_challenge(db_guild, challenge_id)
         if not db_challenge:
             if send: 
-                await interaction.response.send_message(f"Something went wrong when finding the challenge.", ephemeral=True)
+                await interaction.followup.send(f"Something went wrong when finding the challenge.", ephemeral=True)
             return (None, None)
     else:
         # Get user's active match, if exists
         db_challenge = find_active_challenge_by_user(db_guild, interaction.user.id)
         if not db_challenge:
             if send: 
-                await interaction.response.send_message(f"You do not have any open challenges.", ephemeral=True)
+                await interaction.followup.send(f"You do not have any open challenges.", ephemeral=True)
             return (None, None)
         challenge_id = db_challenge['id']
     return (db_challenge, challenge_id)

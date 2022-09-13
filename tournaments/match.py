@@ -137,8 +137,6 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
     match_id = db_match['id']
     match_embed: Embed = match_message.embeds[0]
     user: Member = interaction.user
-    # Defer response
-    await interaction.response.defer(ephemeral=True)
     # Check if user was one of the players
     if user.id == db_match['player1']['id']:
         voter = db_match['player1']
@@ -313,8 +311,6 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     usage = "Usage: `$bracket report <match_id> <entrant_name | 1️⃣ | 2️⃣>`"
-    # Defer response
-    await interaction.response.defer()
     # Fetch active bracket
     db_bracket = _bracket.find_active_bracket(db_guild)
     if not db_bracket:
@@ -386,10 +382,12 @@ class voting_buttons_view(discord.ui.View):
 
     @discord.ui.button(emoji='1️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player1")
     async def vote_player1(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         await vote_match_button(interaction, button)
 
     @discord.ui.button(emoji='2️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player2")
     async def vote_player2(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         await vote_match_button(interaction, button)
 
 ######################

@@ -41,7 +41,7 @@ async def retrieve_leaderboard(interaction: Interaction):
     db_leaderboard: dict = db_guild['leaderboard']
     leaderboard_embed = create_server_leaderboard_embed(guild, db_leaderboard)
     await interaction.channel.send(embed=leaderboard_embed)
-    await interaction.response.send_message(f"Found leaderboard for server '***{guild.name}***'!", ephemeral=True)
+    await interaction.followup.send(f"Found leaderboard for server '***{guild.name}***'!", ephemeral=True)
     return True
 
 async def retrieve_leaderboard_user_stats(interaction: Interaction, player_mention: str):
@@ -54,7 +54,7 @@ async def retrieve_leaderboard_user_stats(interaction: Interaction, player_menti
         if matched_id:
             user: Member = await interaction.guild.fetch_member(int(player_mention[3:-1]))
         else:
-            await interaction.response.send_message(f"Invalid player mention.", ephemeral=True)
+            await interaction.followup.send(f"Invalid player mention.", ephemeral=True)
             return False
     else:
         user: Member = interaction.user
@@ -65,7 +65,7 @@ async def retrieve_leaderboard_user_stats(interaction: Interaction, player_menti
     # Check if user is in leaderboard
     db_user = find_leaderboard_user_by_id(db_guild, user.id)
     if not db_user:
-        await interaction.response.send_message(f"User <@!{user.id}> has no record in the leaderboard.", ephemeral=True)
+        await interaction.followup.send(f"User <@!{user.id}> has no record in the leaderboard.", ephemeral=True)
         return False
     # Send stats of user
     total_matches = len(db_user['matches'])
@@ -74,7 +74,7 @@ async def retrieve_leaderboard_user_stats(interaction: Interaction, player_menti
     win_rate = "{0:.2%}".format(wins / total_matches)
     stat_embed = create_player_stat_embed(db_user, user)
     await interaction.channel.send(embed=stat_embed)
-    await interaction.response.send_message(f"Found stats for user <@!{user.id}>!", ephemeral=True)
+    await interaction.followup.send(f"Found stats for user <@!{user.id}>!", ephemeral=True)
     return True
 
 async def create_leaderboard_user(guild: Guild, db_challenge: dict, db_player: dict, win: bool):
