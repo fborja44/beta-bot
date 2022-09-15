@@ -44,7 +44,9 @@ async def add_guild(guild: Guild):
         "name": guild.name,
         "config": {
             "tournament_channel": None,     # TODO: Forum Channel (id) to post tournaments to (optional)
-            "manager_roles": None,          # TODO: Roles (ids) to give tournament organizer/manager permissions to
+            "manager_roles": [],            # TODO: Roles (ids) to give tournament organizer/manager permissions to
+            "allowed_channels": [],         # TODO: Channels that bot commands can be sent to
+            "allowed_categories": [],       # TODO: Categories of channels that bot commands can be sent to
             "create_events": False,         # TODO: Option to create server events with brackets
             "disable_brackets": False,      # TODO: Disables user created bracket commands
             "disable_challenges": False,    # TODO: Disables challenges
@@ -72,6 +74,17 @@ async def update_guild(guild: Guild):
         print(f"Successfully updated guild ['name'='{guild.name}'] in database.")
         return db_guild
     print(f"Failed to update guild ['name'='{guild.name}'] in database.")
+    return None
+
+async def set_guild(guild_id: int, new_guild: dict):
+    """
+    Sets a guild document in the database to the specified document
+    """
+    db_guild = await mdb.update_single_document({'guild_id': guild_id}, {'$set': new_guild}, GUILDS)
+    if db_guild:
+        print(f"Successfully set guild ['id'='{guild_id}'] in database.")
+        return db_guild
+    print(f"Failed to set guild ['id'='{guild_id}'] in database.")
     return None
 
 async def delete_guild(guild: Guild):

@@ -7,6 +7,7 @@ from pydoc import describe
 from pymongo import MongoClient
 import tournaments.bracket as bracket
 import tournaments.challenge as challenge
+import tournaments.channel as _channel
 import tournaments.leaderboard as leaderboard
 import tournaments.match as match
 import challonge
@@ -71,6 +72,13 @@ class MyBot(discord.Client):
 
     async def on_guild_remove(self, guild: Guild):
         await _guild.delete_guild(db, guild)
+
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+        # Check if tournament channel; If it is, update the guild.
+        guild: Guild = channel.guild
+        db_guild: dict = await _guild.find_guild(guild.id)
+        if channel.id == db_guild['config']['tournament_channel']['id']:
+            await _channel.delete_tournament_channel_db(db_guild)
 
 intents = discord.Intents.default()
 intents.members = True
@@ -188,6 +196,17 @@ async def player(interaction: Interaction, player_mention: str=""):
 #     await interaction.response.defer(ephemeral=True)
 #     await leaderboard.retrieve_leaderboard(interaction)
 
+ConfigGroup = app_commands.Group(name="config", description="beta-bot configuration commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+@ConfigGroup.command(description="Retrieves the leaderboard stats for a player.")
+async def set_tournament_channel(interaction: Interaction, channel_name: str, is_forum: bool, allow_messages: bool, category_name: str = ""):
+    await interaction.response.defer(ephemeral=True)
+    await _channel.create_tournament_channel(interaction, channel_name, category_name, is_forum, allow_messages)
+
+@ConfigGroup.command(description="Retrieves the leaderboard stats for a player.")
+async def delete_tournament_channel(interaction: Interaction):
+    await interaction.response.defer(ephemeral=True)
+    await _channel.delete_tournament_channel(interaction)
+
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 tree.add_command(BracketGroup, guild=discord.Object(id=713190806688628786))
 
@@ -196,5 +215,8 @@ tree.add_command(ChallengeGroup, guild=discord.Object(id=713190806688628786))
 
 tree.add_command(LeaderboardGroup, guild=TEST_GUILD)
 tree.add_command(LeaderboardGroup, guild=discord.Object(id=713190806688628786))
+
+tree.add_command(ConfigGroup, guild=TEST_GUILD)
+tree.add_command(ConfigGroup, guild=discord.Object(id=713190806688628786))
 
 bot_client.run(TOKEN)
