@@ -1,4 +1,4 @@
-from discord import Guild
+from discord import Guild, Interaction
 from pprint import pprint
 import utils.mdb as mdb
 
@@ -42,12 +42,17 @@ async def add_guild(guild: Guild):
     new_guild = {
         "guild_id": guild.id,
         "name": guild.name,
+        "config": {
+            "tournament_channel": None,     # TODO: Forum Channel (id) to post tournaments to (optional)
+            "manager_roles": None,          # TODO: Roles (ids) to give tournament organizer/manager permissions to
+            "create_events": False,         # TODO: Option to create server events with brackets
+            "disable_brackets": False,      # TODO: Disables user created bracket commands
+            "disable_challenges": False,    # TODO: Disables challenges
+            "disable_leaderboard": False,   # TODO: Disables leaderboard commands
+        },
         "brackets": [],
         "challenges": [],
-        # "commands": [],
-        # "favorites": [],
         "leaderboard": [],
-        # "users": []
     }
 
     # Add to database
@@ -111,3 +116,37 @@ async def pull_from_guild(guild: Guild, target_array: str, document: dict):
         return document
     print(f"Failed to pull subdocument ['id'={document_id}] to field '{target_array}' in guild ['name'='{guild.name}'].")
     return None
+
+#######################
+## COMMAND FUNCTIONS ##
+#######################
+
+async def update_tournament_channel(interaction: Interaction, channel_name: str):
+    """"
+    TODO
+    Updates the tournament channel in a guild
+    """
+    
+async def toggle_tournament_events(interaction: Interaction):
+    """
+    TODO
+    Toggles create_events option.
+    """
+
+async def toggle_brackets(interaction: Interaction):
+    """
+    TODO
+    Toggles the disable_brackets option.
+    """
+
+async def toggle_challenges(interaction: Interaction):
+    """
+    TODO
+    Toggles the disable_challenges option.
+    """
+
+async def toggle_leaderboard(interaction: Interaction):
+    """
+    TODO
+    Toggles the disable_leaderboard option.
+    """

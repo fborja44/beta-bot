@@ -142,8 +142,10 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
     # Check if user was one of the players
     if user.id == db_match['player1']['id']:
         voter = db_match['player1']
+        opponent = db_match['player2']
     elif user.id == db_match['player2']['id']:
         voter = db_match['player2']
+        opponent = db_match['player1']
     else:
         await interaction.followup.send(f"You are not a player in this match.", ephemeral=True)
         return False
@@ -158,6 +160,9 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
         vote = button.emoji.name
         action = "Added" if not voter['vote'] else "Changed"
     else:
+        if opponent['vote'] is not None:
+            await interaction.followup.send(f"You cannot remove your vote if both players have voted. Either vote for the other player, or contact and admin.", ephemeral=True)
+            return False
         vote = None
         action = "Removed"
     # Update match player in database

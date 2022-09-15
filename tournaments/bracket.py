@@ -2,6 +2,7 @@ from cgi import print_exception
 from utils.common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
 from datetime import datetime, timedelta, date
 from discord import Embed, Guild, Interaction, Message, Member, TextChannel
+from discord.ext import tasks
 from dotenv import load_dotenv
 from utils.logger import printlog, printlog_msg
 from pprint import pprint
@@ -833,6 +834,11 @@ def parse_time(string: str):
         if current_time > time:
             time += timedelta(days=1)
     return time
+
+# TODO: Check-in period to start bracket
+# def create_bracket_start_task(time: datetime):
+#     @tasks.loop(time=time)
+#     async def start_registration_phase():
 
 #######################
 ## MESSAGE FUNCTIONS ##
