@@ -54,13 +54,14 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
     # Create channel
     if is_forum:
         try:
-            new_channel: ForumChannel = await guild.create_forum(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category, reason=f"{user.name} set tournament channel.")
+            new_channel: ForumChannel = await guild.create_forum(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category, reason=f"{user.name} set tournament channel.", sync_permissions=True)
+            new_channel.set_permissions(guild.default_role, create_public_threads=False, create_private_threads=False)
         except:
             await interaction.followup.send(f"Failed to create tournament forum channel.")
             return False
     else:
         try:
-            new_channel: TextChannel = await guild.create_text_channel(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category, reason=f"{user.name} set tournament channel.")
+            new_channel: TextChannel = await guild.create_text_channel(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category, reason=f"{user.name} set tournament channel.", sync_permissions=True)
         except:
             await interaction.followup.send(f"Failed to create tournament text channel.")
             return False
@@ -75,6 +76,12 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
     print(f"User '{user.name}' added tournament channel to guild.")
     await interaction.followup.send(f"Succesfully created new tournament channel <#{new_channel.id}>.")
     return True
+
+async def set_tournament_channel(interaction: Interaction):
+    """
+    TODO
+    Sets the tournament channel in a guild if it does not already exist.
+    """
 
 async def delete_tournament_channel(interaction: Interaction):
     """

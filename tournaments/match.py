@@ -1,3 +1,4 @@
+from utils.color import BLACK, GREEN, RED
 from utils.common import MATCHES, ICON
 from datetime import datetime
 from discord import Button, Embed, Guild, Interaction, Member, Message, TextChannel, User
@@ -454,7 +455,7 @@ def create_match_embed(db_bracket: dict, db_match: dict):
     time = datetime.now(tz=pytz.timezone('US/Eastern')).strftime("%#I:%M %p %Z")
     round_name = get_round_name(db_bracket, match_challonge_id, round)
     # Main embed
-    embed = Embed(title=f"⚔️ {round_name}", description=f"Awaiting result...\nOpened at {time}", color=0x50C878)
+    embed = Embed(title=f"⚔️ {round_name}", description=f"Awaiting result...\nOpened at {time}", color=GREEN)
     # Author field
     embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
     # Match info field
@@ -486,7 +487,7 @@ def edit_match_embed_dispute(embed: Embed):
     Updates embed object for disputes.
     """
     embed.add_field(name="🛑 Result Dispute 🛑", value="Contact a bracket manager or change vote to resolve.")
-    embed.color = 0xD4180F
+    embed.color = RED
     return embed
 
 def edit_match_embed_confirmed(embed: Embed, match_id: int, player1: dict, player2: dict, winner_emote: str, is_dq: bool=False):
@@ -513,7 +514,7 @@ def edit_match_embed_confirmed(embed: Embed, match_id: int, player1: dict, playe
         # Remove dispute field
         embed.remove_field(2)
     embed.set_footer(text=f"Result finalized. To change result, contact a bracket manager.\nmatch_id: {match_id}")
-    embed.color = 0x000000
+    embed.color = BLACK
     return embed
 
 def get_round_name(db_bracket: dict, match_id: int, round: int):

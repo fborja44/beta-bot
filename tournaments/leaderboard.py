@@ -1,3 +1,4 @@
+from utils.color import GOLD
 from utils.common import GUILDS, ICON
 from discord import Embed, Guild, Interaction, Member, Message, TextChannel, User
 from utils.logger import printlog
@@ -124,7 +125,7 @@ async def update_leaderboard_user_score(guild_id: int, db_challenge: dict, db_us
 #######################
 
 def create_server_leaderboard_embed(guild: Guild, db_leaderboard):
-    embed = Embed(title=f"Server Challenge Leaderboard", color=0xFAD25A)
+    embed = Embed(title=f"Server Challenge Leaderboard", color=GOLD)
     embed.set_author(name=guild.name, icon_url=guild.icon.url)
     embed.add_field(name="Player", value="1. Zain")
     embed.add_field(name="Rating", value="1200")
@@ -136,7 +137,7 @@ def create_player_stat_embed(db_user: dict, user: Member):
     wins = db_user['wins']
     losses = db_user['losses']
     win_rate = "{0:.2%}".format(wins / total_matches)
-    embed = Embed(title=f"📈  Leaderboard Player Stats", description=f"Stats for: <@!{db_user['id']}>", color=0xFAD25A)
+    embed = Embed(title=f"📈  Leaderboard Player Stats", description=f"Stats for: <@!{db_user['id']}>", color=GOLD)
     embed.set_author(name=f"{user.display_name} | {user.name}#{user.discriminator}", icon_url=user.display_avatar.url)
     embed.add_field(name="Wins", value=f"{wins}")
     embed.add_field(name="Losses", value=f"{losses}")

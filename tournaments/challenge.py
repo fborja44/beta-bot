@@ -1,3 +1,4 @@
+from utils.color import GREEN, RED, WOOP_BLUE
 from utils.common import CHALLENGES, GUILDS, ICON
 from datetime import datetime
 from discord import Button, Client, Embed, Guild, Interaction, Member, Message, TextChannel, User
@@ -39,7 +40,7 @@ def find_active_challenge_by_user(db_guild: dict, user_id: int):
     except:
         return None
 
-async def create_challenge(client: Client, interaction: Interaction, player_mention: str, best_of: int):
+async def create_challenge(client: Client, interaction: Interaction, player_mention: str | None, best_of: int):
     """
     Creates a new challenge match between two players.
     If player_mention is None, waits for a challenger.
@@ -63,7 +64,7 @@ async def create_challenge(client: Client, interaction: Interaction, player_ment
 
     usage = f'Usage: `/challenge create [best_of] @[player_mention] `\nex. `/challenge create player_mention:` <@!{client.user.id}> `best_of: 3`'
     # Check for metioned user
-    if len(player_mention.strip()) > 0:
+    if player_mention is not None and len(player_mention.strip()) > 0:
         matched_id = id_match.search(player_mention)
         if matched_id:
             player2: Member = await guild.fetch_member(int(player_mention[3:-1]))
@@ -388,7 +389,7 @@ def create_challenge_embed(db_challenge: dict):
     player1_name = db_challenge['player1']['name']
     player2_id = db_challenge['player2']['id']
     # Main embed
-    embed = Embed(title=f"⚔️  Challenge - Best of {db_challenge['best_of']}", description=f"{player1_name} has issued a challenge!", color=0x56A1E3)
+    embed = Embed(title=f"⚔️  Challenge - Best of {db_challenge['best_of']}", description=f"{player1_name} has issued a challenge!", color=WOOP_BLUE)
     # Author field
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     # Challenge info field
@@ -408,7 +409,7 @@ def edit_challenge_embed_start(embed: Embed, db_challenge: dict):
     player2_id = db_challenge['player2']['id']
     player1_vote = db_challenge['player1']['vote']
     player2_vote = db_challenge['player2']['vote']
-    embed.color = 0x50C878
+    embed.color = GREEN
     # Update fields for live match
     embed.description += "\nAwaiting result..."
     embed.set_field_at(0, name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
@@ -422,7 +423,7 @@ def edit_challenge_embed_dispute(embed: Embed):
     Edits an embed object for disputes.
     """
     embed.add_field(name="🛑 Result Dispute 🛑", value="Contact a bracket manager or change vote to resolve.")
-    embed.color = 0xD4180F
+    embed.color = RED
     return embed
 
 ##################
