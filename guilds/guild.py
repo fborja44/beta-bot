@@ -43,10 +43,8 @@ async def add_guild(guild: Guild):
         "guild_id": guild.id,
         "name": guild.name,
         "config": {
-            "tournament_channel": None,     # ForumChannel or TextChannel (id) to post tournaments to (optional)
-            "manager_roles": [],            # TODO: Roles (ids) to give tournament organizer/manager permissions to
-            "allowed_channels": [],         # TODO: Channels that bot commands can be sent to
-            "allowed_categories": [],       # TODO: Categories of channels that bot commands can be sent to
+            "tournament_channels": [],      # TODO: List of ForumChannels/TextChannels (id) where users can create tournaments
+            "alert_channels": [],           # TODO: List of TextChannels where bracket alerts will be sent to
             "brackets_as_threads": False,   # TODO: Create brackets as threads even in traditional TextChannels
             "create_events": False,         # TODO: Option to create server events with brackets
             "disable_brackets": False,      # TODO: Disables user created bracket commands

@@ -77,8 +77,8 @@ class MyBot(discord.Client):
         # Check if tournament channel; If it is, update the guild.
         guild: Guild = channel.guild
         db_guild: dict = await _guild.find_guild(guild.id)
-        if channel.id == db_guild['config']['tournament_channel']['id']:
-            await _channel.delete_tournament_channel_db(db_guild)
+        if channel.id in db_guild['config']['tournament_channels']:
+            await _channel.delete_tournament_channel_db(db_guild, channel.id)
 
 intents = discord.Intents.default()
 intents.members = True
@@ -196,16 +196,16 @@ async def player(interaction: Interaction, player_mention: str=""):
 #     await interaction.response.defer(ephemeral=True)
 #     await leaderboard.retrieve_leaderboard(interaction)
 
-ConfigGroup = app_commands.Group(name="config", description="beta-bot configuration commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
-@ConfigGroup.command(description="Retrieves the leaderboard stats for a player.")
-async def set_tournament_channel(interaction: Interaction, channel_name: str, is_forum: bool, allow_messages: bool, category_name: str = ""):
+TConfigGroup = app_commands.Group(name="tchannel", description="beta-bot tournament channel configuration commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+@TConfigGroup.command(description="Creates a tournament channel. Forum Channels are recommended if available.")
+async def create(interaction: Interaction, channel_name: str, is_forum: bool, allow_messages: bool= True, category_name: str = ""):
     await interaction.response.defer(ephemeral=True)
     await _channel.create_tournament_channel(interaction, channel_name.strip(), category_name.strip(), is_forum, allow_messages)
 
-@ConfigGroup.command(description="Retrieves the leaderboard stats for a player.")
-async def delete_tournament_channel(interaction: Interaction):
+@TConfigGroup.command(description="Deletes a tournament channel.")
+async def delete(interaction: Interaction, channel_mention: str=""):
     await interaction.response.defer(ephemeral=True)
-    await _channel.delete_tournament_channel(interaction)
+    await _channel.delete_tournament_channel(interaction, channel_mention)
 
 tree.add_command(BracketGroup, guild=TEST_GUILD)
 tree.add_command(BracketGroup, guild=discord.Object(id=713190806688628786))
@@ -216,7 +216,7 @@ tree.add_command(ChallengeGroup, guild=discord.Object(id=713190806688628786))
 tree.add_command(LeaderboardGroup, guild=TEST_GUILD)
 tree.add_command(LeaderboardGroup, guild=discord.Object(id=713190806688628786))
 
-tree.add_command(ConfigGroup, guild=TEST_GUILD)
-tree.add_command(ConfigGroup, guild=discord.Object(id=713190806688628786))
+tree.add_command(TConfigGroup, guild=TEST_GUILD)
+tree.add_command(TConfigGroup, guild=discord.Object(id=713190806688628786))
 
 bot_client.run(TOKEN)
