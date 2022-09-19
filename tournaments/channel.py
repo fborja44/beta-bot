@@ -45,16 +45,16 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
     # Create channel
     if is_forum:
         try:
-            new_channel: ForumChannel = await guild.create_forum(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category, reason=f"{user.name} set tournament channel.")
+            new_channel: ForumChannel = await guild.create_forum(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category)
             await new_channel.set_permissions(guild.default_role, create_public_threads=False, create_private_threads=False)
-            command_thread, command_message = await create_command_thread(new_channel)
+            await create_command_thread(new_channel)
         except Exception as e:
             printlog("Failed to create tournament forum channel.", e)
             await interaction.followup.send(f"Failed to create tournament forum channel.")
             return False
     else:
         try:
-            new_channel: TextChannel = await guild.create_text_channel(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category, reason=f"{user.name} set tournament channel.")
+            new_channel: TextChannel = await guild.create_text_channel(channel_name, topic="Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot", category=target_category)
         except Exception as e:
             printlog("Failed to create tournament forum channel.", e)
             await interaction.followup.send(f"Failed to create tournament text channel.")
@@ -91,9 +91,9 @@ async def set_tournament_channel(interaction: Interaction, channel_mention: str,
         await interaction.followup.send(f"<#{channel.id}> is already set as a tournament channel .", ephemeral=True)
         return False
     # Check if channel is Forum or Text
-    if channel.type is 'forum':
-        command_thread, command_message= await create_command_thread(channel)
-    elif channel.type is 'text':
+    if str(channel.type) is 'forum':
+        await create_command_thread(channel)
+    elif str(channel.type) is 'text':
         await channel.send("This channel has been set as a tournament channel. Use `/bracket create` to create a new tournament!")
     else:
         await interaction.followup.send(f"Tournament channels must be a either a Text Channel or a Forum Channel.", ephemeral=True)
@@ -118,7 +118,8 @@ async def delete_tournament_channel(interaction: Interaction, channel_mention: s
         await interaction.followup.send(f"This server does not have a tournament channel.")
         return False
     # Check if in a valid tournament channel if no channel is mentioned
-    if interaction.channel.type is 'thread':
+    if 'thread' in str(interaction.channel.type):
+        print(interaction.channel.parent_id)
         if not channel_mention and interaction.channel.parent_id not in db_guild['config']['tournament_channels']:
             await interaction.followup.send("This channel is not a tournament channel.")
             return False
@@ -162,7 +163,16 @@ async def create_command_thread(forum_channel: ForumChannel):
     Creates the initial post in a forum channel where tournament commands are to be posted.
     """
     name = 'Tournament Management'
-    content = 'This thread is used to create new brackets and manage existing brackets. Existing brackets can also be managed in their respective threads.\n\nTo create a new bracket use the `/bracket create` slash command.'
+    content = (
+            "**Tournament Discord Bot Instructions**\n"
+            "This thread is used to create new brackets and manage existing brackets. Existing brackets can also be managed in their respective threads.\n\n"
+            "To create a new bracket use `/bracket create`.\n\n"
+            "To view a list of possible bracket commands, use `/bracket help`.\n\n")
     command_thread, command_message = await forum_channel.create_thread(name=name, content=content)
     await command_thread.edit(pinned=True)
     return command_thread, command_message
+
+async def add_channel_to_alerts(interaction: Interaction):
+    """
+    Adds a channel to channels to receive bracket alerts.
+    """

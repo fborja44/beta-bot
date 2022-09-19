@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from discord import PartialMessageable
 import os
 
 # common.py
@@ -20,3 +21,9 @@ IMGUR_CLIENT_ID = os.getenv('IMGUR_ID')
 IMGUR_URL = 'https://api.imgur.com/3'
 
 MAX_ENTRANTS = 24
+
+def is_thread(channel: PartialMessageable):
+    """
+    Returns True if the channel provided is a thread, False otherwise.
+    """
+    return 'thread' in str(channel.type)

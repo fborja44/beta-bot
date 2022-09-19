@@ -81,16 +81,17 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
     Creates a new bracket and adds it to the guild.
     """
     guild: Guild = interaction.guild
-    channel: ForumChannel | TextChannel = interaction.channel if 'thread' not in interaction.channel.type else interaction.channel.parent
+    channel: ForumChannel | TextChannel = interaction.channel.parent if 'thread' in str(interaction.channel.type) else interaction.channel
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
     # Check args
     # usage = 'Usage: `$bracket create <name> [time]`'
 
     # Check if in a valid tournament channel
-    if interaction.channel_id not in db_guild['config']['tournament_channels']:
+    if channel.id not in db_guild['config']['tournament_channels']:
         if respond: await interaction.followup.send(f"Brackets must be created in a tournament channel.") # TODO: List guild's tournament channels.
         return False
+
     # Parse time; Default is 1 hour from current time
     parsed_time = parse_time(time) # TODO: needs testing for bad input
     # Max character length == 60
@@ -153,7 +154,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         
         embed = create_bracket_embed(new_bracket, interaction.user)
         # Send tournament message
-        if channel.type == 'forum':
+        if str(channel.type) == 'forum':
             bracket_thread, bracket_message = await channel.create_thread(name=f"{bracket_title} ({bracket_challonge['tournament_type'].title()})", content="🚨 Open for Registration" , embed=embed, view=registration_buttons_view())
             new_bracket['thread_id'] = bracket_thread.id
         else:
@@ -481,7 +482,7 @@ async def finalize_bracket(interaction: Interaction, bracket_title: str):
     if db_bracket['thread_id']:
         try:
             bracket_thread: Thread = guild.get_thread(db_bracket['thread_id'])
-            await bracket_thread.edit(locked=True, pinned=False, reason="Bracket finalized.")
+            await bracket_thread.edit(locked=True, pinned=False)
         except:
             print(f"Failed to edit thread for bracket '{bracket_title}' ['thread_id'='{db_bracket['thread_id']}'].")
     return True
