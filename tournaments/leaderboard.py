@@ -1,11 +1,11 @@
+from discord import Embed, Guild, Interaction, Member, Message, TextChannel, User
+from pprint import pprint
+from guilds import guild as _guild
+from tournaments import challenge
 from utils.color import GOLD
 from utils.common import GUILDS, ICON
-from discord import Embed, Guild, Interaction, Member, Message, TextChannel, User
 from utils.logger import printlog
-from pprint import pprint
-import tournaments.challenge as _challenge
-import guilds.guild as _guild
-import utils.mdb as mdb
+from utils import mdb
 
 # leaderboard.py
 # leaderboard for 1v1 challenges
@@ -51,7 +51,7 @@ async def retrieve_leaderboard_user_stats(interaction: Interaction, player_menti
     If not is not specified, retrieves the stats for the user who issued the command.
     """
     if len(player_mention.strip()) > 0:
-        matched_id = _challenge.id_match.search(player_mention)
+        matched_id = challenge.id_match.search(player_mention)
         if matched_id:
             user: Member = await interaction.guild.fetch_member(int(player_mention[3:-1]))
         else:

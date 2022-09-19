@@ -1,15 +1,14 @@
-from utils.color import BLACK, GREEN, RED
-from utils.common import MATCHES, ICON
 from datetime import datetime
 from discord import Button, Embed, Guild, Interaction, Member, Message, TextChannel, User
-from utils.logger import printlog
+from guilds import guild as _guild
 from pprint import pprint
-import tournaments.bracket as _bracket
-import tournaments.challenge as _challenge
+from tournaments import bracket as _bracket, challenge as _challenge
+from utils.color import BLACK, GREEN, RED
+from utils.common import MATCHES, ICON
+from utils.logger import printlog
 import challonge
 import discord
 import pytz
-import guilds.guild as _guild
 
 # match.py
 # Bracket matches

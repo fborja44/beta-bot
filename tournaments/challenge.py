@@ -1,15 +1,14 @@
+from datetime import datetime
+from discord import Button, Embed, Guild, Interaction, Member, Message, TextChannel, User
+from guilds import guild as _guild
+from pprint import pprint
+from tournaments import leaderboard as _leaderboard, match as _match
 from utils.color import GREEN, RED, WOOP_BLUE
 from utils.common import CHALLENGES, GUILDS, ICON
-from datetime import datetime
-from discord import Button, Client, Embed, Guild, Interaction, Member, Message, TextChannel, User
 from utils.logger import printlog
-from pprint import pprint
-import guilds.guild as _guild
+from utils import mdb
 import discord
 import pytz
-import tournaments.leaderboard as _leaderboard
-import tournaments.match as _match
-import utils.mdb as mdb
 import re
 
 # challenge.py
@@ -40,7 +39,7 @@ def find_active_challenge_by_user(db_guild: dict, user_id: int):
     except:
         return None
 
-async def create_challenge(client: Client, interaction: Interaction, player_mention: str | None, best_of: int):
+async def create_challenge(interaction: Interaction, player_mention: str | None, best_of: int):
     """
     Creates a new challenge match between two players.
     If player_mention is None, waits for a challenger.
@@ -62,7 +61,7 @@ async def create_challenge(client: Client, interaction: Interaction, player_ment
         await interaction.followup.send("There must be an positive odd number of rounds.", ephemeral=True)
         return False
 
-    usage = f'Usage: `/challenge create [best_of] @[player_mention] `\nex. `/challenge create player_mention:` <@!{client.user.id}> `best_of: 3`'
+    usage = f'Usage: `/challenge create [best_of] @[player_mention] `\nex. `/challenge create player_mention:` <@!{interaction.user.id}> `best_of: 3`'
     # Check for metioned user
     if player_mention is not None and len(player_mention.strip()) > 0:
         matched_id = id_match.search(player_mention)

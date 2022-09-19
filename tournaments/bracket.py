@@ -1,18 +1,18 @@
 from cgi import print_exception
-from utils.color import GOLD, WOOP_PURPLE
-from utils.common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
 from datetime import datetime, timedelta, date
 from discord import Embed, Guild, ForumChannel, Interaction, Message, Member, TextChannel, Thread
-from discord.ext import tasks
+# from discord.ext import tasks
 from dotenv import load_dotenv
-from utils.logger import printlog, printlog_msg
 from pprint import pprint
 from traceback import print_exception
+from tournaments import match as _match
+from guilds import guild as _guild
+from utils.color import GOLD, WOOP_PURPLE
+from utils.common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
+from utils.logger import printlog
+from utils import mdb
 import challonge
 import discord
-import guilds.guild as _guild
-import tournaments.match as _match
-import utils.mdb as mdb
 import os
 import pytz
 import re
@@ -160,6 +160,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         else:
             bracket_message: Message = await channel.send(embed=embed, view=registration_buttons_view())
         # Send creation message in original channel
+        
         info_embed = create_info_embed(new_bracket)
         await interaction.channel.send(embed=info_embed)
 
