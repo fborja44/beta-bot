@@ -1,10 +1,6 @@
-from utils.common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
 from discord import Embed, Guild, Interaction, Message, Member, Role, TextChannel
 from utils.logger import printlog, printlog_msg
 from pprint import pprint
-import discord
-import guilds.guild as _guild
-import tournaments.match as _match
 
 # roles.py
 # Tournament organizer/manager roles and others

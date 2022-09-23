@@ -1,10 +1,10 @@
 from discord import app_commands, Guild, Member, Message, Interaction
 from colorama import Fore, Back, Style
-from commands import bracket_group, challenge_group, channel_group, leaderboard_group
+from commands import challenge_group, channel_group, leaderboard_group, tournament_group
 from guilds import channel as _channel
 from pprint import pprint
 from pymongo import MongoClient
-from tournaments import bracket, challenge, match
+from tournaments import challenge, match, tournament
 from utils.common import CHALLONGE_USER, CHALLONGE_KEY, MONGO_ADDR, MAX_ENTRANTS, TOKEN
 from utils import logger
 import challonge
@@ -52,7 +52,7 @@ class MyBot(discord.Client):
             await tree.sync(guild=discord.Object(id=713190806688628786))
             self.synced = True
         if not self.views:
-            self.add_view(bracket.registration_buttons_view())
+            self.add_view(tournament.registration_buttons_view())
             self.add_view(match.voting_buttons_view())
             self.add_view(challenge.accept_view())
             self.add_view(challenge.voting_buttons_view())
@@ -81,8 +81,8 @@ intents.members = True
 bot_client = MyBot(intents=intents)
 tree = app_commands.CommandTree(bot_client)
 
-tree.add_command(bracket_group.BracketGroup, guild=TEST_GUILD)
-tree.add_command(bracket_group.BracketGroup, guild=discord.Object(id=713190806688628786))
+tree.add_command(tournament_group.TournamentGroup, guild=TEST_GUILD)
+tree.add_command(tournament_group.TournamentGroup, guild=discord.Object(id=713190806688628786))
 
 tree.add_command(challenge_group.ChallengeGroup, guild=TEST_GUILD)
 tree.add_command(challenge_group.ChallengeGroup, guild=discord.Object(id=713190806688628786))

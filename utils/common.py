@@ -11,7 +11,7 @@ CHALLONGE_KEY = os.getenv('CHALLONGE_KEY')
 MONGO_ADDR = os.getenv('MONGO')
 TOKEN = os.getenv('TOKEN')
 
-BRACKETS = 'brackets'
+TOURNAMENTS = 'tournaments'
 CHALLENGES = 'challenges'
 GUILDS = 'guilds'
 MATCHES = 'matches'

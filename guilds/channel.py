@@ -1,4 +1,3 @@
-from utils.common import BRACKETS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
 from discord import Embed, ForumChannel, Guild, Interaction, Message, Member, TextChannel, CategoryChannel, Thread
 from utils.logger import printlog, printlog_msg
 from pprint import pprint
@@ -68,6 +67,10 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
 
     # Add channel to guild
     db_guild['config']['tournament_channels'].append(new_channel.id)
+    # {
+    #     'id': new_channel.id,
+    #     'alert_channels': [],
+    # }
     await _guild.set_guild(guild.id, db_guild)
     print(f"User '{user.name}' added tournament channel to guild.")
     await interaction.followup.send(f"Succesfully created new tournament channel <#{new_channel.id}>.")
@@ -106,7 +109,7 @@ async def set_tournament_channel(interaction: Interaction, channel_mention: str,
         await create_command_thread(channel)
         # Check if command message is present; If not, then send one
     elif str(channel.type) is 'text':
-        await channel.send("This channel has been set as a tournament channel. Use `/bracket create` to create a new tournament!")
+        await channel.send("This channel has been set as a tournament channel. Use `/tournament create` to create a new tournament!")
     else:
         await interaction.followup.send(f"Tournament channels must be a either a Text Channel or a Forum Channel.", ephemeral=True)
         return False
@@ -186,16 +189,16 @@ async def create_command_thread(forum_channel: ForumChannel):
     name = 'ℹ️ Tournament Management'
     content = (
             "**Tournament Discord Bot Instructions**\n"
-            "This thread is used to create new brackets and manage existing brackets. Existing brackets can also be managed in their respective threads.\n\n"
-            "To create a new bracket use `/bracket create`.\n\n"
-            "To view a list of possible bracket commands, use `/bracket help`.\n\n")
+            "This thread is used to create new tournaments and manage existing tournaments. Existing tournaments can also be managed in their respective threads.\n\n"
+            "To create a new tournament use `/tournament create`.\n\n"
+            "To view a list of possible tournament commands, use `/tournament help`.\n\n")
     command_thread, command_message = await forum_channel.create_thread(name=name, content=content)
     await command_thread.edit(pinned=True)
     return command_thread, command_message
 
 async def add_channel_to_alerts(interaction: Interaction, channel_mention: str):
     """
-    Adds a channel to channels to receive bracket alerts.
+    Adds a channel to channels to receive tournament alerts.
     TODO: channel mention
     """
     channel: TextChannel = interaction.channel
@@ -219,7 +222,7 @@ async def add_channel_to_alerts(interaction: Interaction, channel_mention: str):
 
 async def remove_channel_from_alerts(interaction: Interaction, channel_mention: str):
     """
-    Adds a channel to channels to receive bracket alerts.
+    Adds a channel to channels to receive tournament alerts.
     TODO: channel mention
     """
     channel: TextChannel = interaction.channel

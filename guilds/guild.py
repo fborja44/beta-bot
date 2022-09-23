@@ -43,15 +43,15 @@ async def add_guild(guild: Guild):
         "guild_id": guild.id,
         "name": guild.name,
         "config": {
-            "tournament_channels": [],      # List of ForumChannels/TextChannels (id) where users can create tournaments
-            "alert_channels": [],           # TODO: List of TextChannels where bracket alerts will be sent to
-            "brackets_as_threads": False,   # TODO: Create brackets as threads even in traditional TextChannels
-            "create_events": False,         # TODO: Option to create server events with brackets
-            "disable_brackets": False,      # TODO: Disables user created bracket commands
-            "disable_challenges": False,    # TODO: Disables challenges
-            "disable_leaderboard": False,   # TODO: Disables leaderboard commands
+            "tournament_channels": [],          # List of ForumChannels/TextChannels (id) where users can create tournaments
+            "alert_channels": [],               # TODO: List of TextChannels where tournament alerts will be sent to
+            "tournaments_as_threads": False,    # TODO: Create tournaments as threads even in traditional TextChannels
+            "create_events": False,             # TODO: Option to create server events with tournaments
+            "disable_tournaments": False,          # TODO: Disables user created tournament commands
+            "disable_challenges": False,        # TODO: Disables challenges
+            "disable_leaderboard": False,       # TODO: Disables leaderboard commands
         },
-        "brackets": [],
+        "tournaments": [],
         "challenges": [],
         "leaderboard": [],
     }
@@ -145,10 +145,10 @@ async def toggle_tournament_events(interaction: Interaction):
     Toggles create_events option.
     """
 
-async def toggle_brackets(interaction: Interaction):
+async def toggle_tournaments(interaction: Interaction):
     """
     TODO
-    Toggles the disable_brackets option.
+    Toggles the disable_tournaments option.
     """
 
 async def toggle_challenges(interaction: Interaction):

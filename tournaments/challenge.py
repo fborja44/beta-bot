@@ -122,7 +122,7 @@ async def create_challenge(interaction: Interaction, player_mention: str | None,
 async def cancel_challenge(interaction: Interaction, challenge_id: int, delete: bool=False):
     """
     Cancels an open challenge match.
-    If delete option is True, deletes challenge regardless of status. Only available to guild admins or bracket managers.
+    If delete option is True, deletes challenge regardless of status. Only available to guild admins or tournament managers.
     """
     channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
@@ -318,7 +318,7 @@ async def report_challenge(challenge_message: Message, db_guild: dict, db_challe
 async def override_challenge_result(interaction: Interaction, challenge_id: int, winner: str):
     """
     Overrides the results of a match. The status of the match does not matter.
-    Only usable by bracket creator or bracket manager
+    Only usable by tournament creator or tournament manager
     """
     guild: Guild = interaction.guild
     user: Member = interaction.user
@@ -421,7 +421,7 @@ def edit_challenge_embed_dispute(embed: Embed):
     """
     Edits an embed object for disputes.
     """
-    embed.add_field(name="🛑 Result Dispute 🛑", value="Contact a bracket manager or change vote to resolve.")
+    embed.add_field(name="🛑 Result Dispute 🛑", value="Contact a tournament manager or change vote to resolve.")
     embed.color = RED
     return embed
 
@@ -464,7 +464,7 @@ class voting_buttons_view(discord.ui.View):
 
 async def retrieve_valid_challenge(interaction: Interaction, db_guild: dict, challenge_id: int=None, send: bool=True):
     """"
-    Parses arguments for bracket functions. Checks if there is a valid challenge.
+    Parses arguments for tournament functions. Checks if there is a valid challenge.
     """
     # Get challenge from database
     if challenge_id:
