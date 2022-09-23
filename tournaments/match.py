@@ -456,11 +456,11 @@ def create_match_embed(db_bracket: dict, db_match: dict):
     # Main embed
     embed = Embed(title=f"⚔️ {round_name}", description=f"Awaiting result...\nOpened at {time}", color=GREEN)
     # Author field
-    embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
+    # embed.set_author(name=bracket_name, url=jump_url, icon_url=ICON)
     # Match info field
-    if round_name == "Grand Finals Set 1":
+    if round_name == "Grand Finals Set 1" and len(db_bracket['entrants']) > 2:
         embed.add_field(name=f"Players", value=f'1️⃣ [W] <@{player1_id}> vs <@{player2_id}> [L] 2️⃣', inline=False)
-    elif round_name == "Grand Finals Set 2":
+    elif round_name == "Grand Finals Set 2" and len(db_bracket['entrants']) > 2:
         embed.add_field(name=f"Players", value=f'1️⃣ [L] <@{player1_id}> vs <@{player2_id}> [L] 2️⃣', inline=False)
     else: 
         embed.add_field(name=f"Players", value=f'1️⃣ <@{player1_id}> vs <@{player2_id}> 2️⃣', inline=False)
@@ -536,8 +536,8 @@ def get_round_name(db_bracket: dict, match_id: int, round: int):
                             return "Grand Finals Set 2"
                     except:
                         return "Grand Finals"
-                    else:
-                        return "Grand Finals"
+                else:
+                    return "Grand Finals"
             case 1:
                 return "Winners Finals"
             case 2:

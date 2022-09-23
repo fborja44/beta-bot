@@ -7,6 +7,10 @@ from tournaments import bracket, match
 
 BracketGroup = app_commands.Group(name="bracket", description="Tournament bracket commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
 
+@BracketGroup.command(description="Lists options for bracket commands.")
+async def help(interaction: Interaction):
+    await interaction.response.send_message("help deez 😎")
+
 @BracketGroup.command(description="[Privileged] Creates a test bracket.")
 async def test(interaction: Interaction, num_entrants: int = 4):
     await interaction.response.defer(ephemeral=True)
@@ -30,7 +34,7 @@ async def update(interaction: Interaction, bracket_title: str, new_bracket_title
 
 @BracketGroup.command(description="Starts a tournament bracket.")
 async def start(interaction: Interaction, bracket_title: str=""):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     await bracket.start_bracket(interaction, bracket_title.strip())
 
 @BracketGroup.command(description="Resets a tournament bracket.")
@@ -49,9 +53,9 @@ async def results(interaction: Interaction, bracket_title: str=""):
     await bracket.send_results(interaction, bracket_title.strip())
 
 @BracketGroup.command(description="Manually reports the result for a tournament bracket match.")
-async def report(interaction: Interaction, match_challonge_id: int, winner: str):
+async def report(interaction: Interaction, match_id: int, winner: str):
     await interaction.response.defer()
-    await match.override_match_result(interaction, match_challonge_id, winner.strip())
+    await match.override_match_result(interaction, match_id, winner.strip())
 
 @BracketGroup.command(description="Disqualifies or removes an entrant from a tournament bracket.")
 async def disqualify(interaction: Interaction, entrant_name: str, bracket_title: str=""):
