@@ -1,5 +1,5 @@
 from cgi import print_exception
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from discord import Embed, Guild, ForumChannel, Interaction, Message, Member, TextChannel, Thread
 # from discord.ext import tasks
 from dotenv import load_dotenv
@@ -29,6 +29,7 @@ load_dotenv()
 os.environ['path'] += r';C:\Program Files\UniConvertor-2.0rc5\dlls'
 
 MIN_ENTRANTS = 2
+EASTERN_ZONE = pytz.timezone('US/Eastern')
 
 time_re_long = re.compile(r'([1-9]|0[1-9]|1[0-2]):[0-5][0-9]\s*([AaPp][Mm])$') # ex. 10:00 AM
 time_re_short = re.compile(r'([1-9]|0[1-9]|1[0-2])\s*([AaPp][Mm])$')           # ex. 10 PM
@@ -93,9 +94,14 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
     if channel.id not in db_guild['config']['tournament_channels']:
         if respond: await interaction.followup.send(f"Brackets must be created in a tournament channel.") # TODO: List guild's tournament channels.
         return False
-
+    # TODO: Check if bot has thread permissions
     # Parse time; Default is 1 hour from current time
-    parsed_time = parse_time(time) # TODO: needs testing for bad input
+    try:
+        parsed_time = parse_time(time) # TODO: needs testing for bad input
+    except ValueError as e:
+        print(e)
+        if respond: await interaction.followup.send("Invalid input for time. ex. `10am` or `10:30pm`")
+        return None, None, None
     # Max character length == 60
     if len(bracket_title.strip()) == 0:
         if respond: await interaction.followup.send(f"Bracket title cannot be empty.")
@@ -106,7 +112,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
     # Max entrants limits
     if max_entrants is not None and (max_entrants < 4 or max_entrants > MAX_ENTRANTS):
         if respond: await interaction.followup.send(f"`max_entrants` must be between 4 and {MAX_ENTRANTS}.")
-        return False
+        return None, None, None
     # Check if bracket already exists
     db_bracket = find_bracket(db_guild, bracket_title)
     if db_bracket:
@@ -146,7 +152,7 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
             'winner': None,
             'max_entrants': max_entrants,
             'matches': [],
-            'created_at': datetime.now(tz=pytz.timezone('US/Eastern')),
+            'created_at': datetime.now(tz=EASTERN_ZONE),
             'start_time': parsed_time, 
             'end_time': None, 
             'completed': False,
@@ -157,10 +163,10 @@ async def create_bracket(interaction: Interaction, bracket_title: str, time: str
         embed = create_bracket_embed(new_bracket, interaction.user)
         # Send tournament message
         if str(channel.type) == 'forum':
-            bracket_thread, bracket_message = await channel.create_thread(name=f"🥊 {bracket_title} - {bracket_challonge['tournament_type'].title()} (0 of{max_entrants})", content="Open for Registration 🚨" , embed=embed, view=registration_buttons_view())
+            thread_title = f"🥊 {bracket_title} - {bracket_challonge['tournament_type'].title()} (0 of{max_entrants})"
+            thread_content = "Open for Registration 🚨"
+            bracket_thread, bracket_message = await channel.create_thread(name=thread_title, content=thread_content , embed=embed, view=registration_buttons_view())
             new_bracket['thread_id'] = bracket_thread.id
-        else:
-            bracket_message: Message = await channel.send(embed=embed, view=registration_buttons_view())
         # Send creation message in alert channels and original channel
         info_embed = create_info_embed(new_bracket)
         await interaction.channel.send(embed=info_embed)
@@ -444,7 +450,7 @@ async def finalize_bracket(interaction: Interaction, bracket_title: str):
     db_guild = await _guild.find_guild(guild.id)
     # Fetch bracket
     # usage = 'Usage: `$bracket finalize [title]`'
-    completed_time = datetime.now(tz=pytz.timezone('US/Eastern'))
+    completed_time = datetime.now(tz=EASTERN_ZONE)
     db_bracket, bracket_title = await retrieve_valid_bracket(interaction, db_guild, bracket_title, active=True)
     if not db_bracket:
         return False
@@ -888,19 +894,28 @@ def parse_time(string: str):
     """
     Helper function to parse a time string in the format XX:XX AM/PM or XX AM/PM.
     Returns the date string and the index of the matched time string.
-    If there is no matching time string, returns the current time + 1 hour.
+    If the string is empty, returns the current time + 1 hour.
     """
+    if len(string.strip()) == 0:
+        return datetime.now(tz=EASTERN_ZONE) + timedelta(hours=1)
     text_match1 = time_re_long.search(string.strip()) # Check for long time
     text_match2 = time_re_short.search(string.strip()) # Check for short time
     if not text_match1 and not text_match2:
-        time = datetime.now(tz=pytz.timezone('US/Eastern')) + timedelta(hours=1)
+        raise ValueError(f"Received invalid input '{string}' for time string.")
     else:
-        current_time = datetime.now(tz=pytz.timezone('US/Eastern'))
+        current_time = datetime.now(tz=EASTERN_ZONE)
         if text_match1:
-            time = datetime.strptime(f'{date.today()} {text_match1.group()}', '%Y-%m-%d %I:%M %p')
+            try:
+                time = datetime.strptime(f'{date.today()} {text_match1.group()}', '%Y-%m-%d %I:%M %p') # w/ space
+            except ValueError:
+                time = datetime.strptime(f'{date.today()} {text_match1.group()}', '%Y-%m-%d %I:%M%p') # no space
         elif text_match2:
-            time = datetime.strptime(f'{date.today()} {text_match2.group()}', '%Y-%m-%d %I %p')
+            try:
+                time = datetime.strptime(f'{date.today()} {text_match2.group()}', '%Y-%m-%d %I %p') # w/ space
+            except ValueError:
+                time = datetime.strptime(f'{date.today()} {text_match2.group()}', '%Y-%m-%d %I%p') # no space
         # Check if current time is before time on current date; If so, go to next day
+        time = EASTERN_ZONE.localize(time) # set time to offset-aware datetime
         if current_time > time:
             time += timedelta(days=1)
     return time
