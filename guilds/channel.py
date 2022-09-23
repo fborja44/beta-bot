@@ -109,7 +109,7 @@ async def set_tournament_channel(interaction: Interaction, channel_mention: str,
         await create_command_thread(channel)
         # Check if command message is present; If not, then send one
     elif str(channel.type) is 'text':
-        await channel.send("This channel has been set as a tournament channel. Use `/tournament create` to create a new tournament!")
+        await channel.send("This channel has been set as a tournament channel. Use `/t create` to create a new tournament!")
     else:
         await interaction.followup.send(f"Tournament channels must be a either a Text Channel or a Forum Channel.", ephemeral=True)
         return False
@@ -190,8 +190,8 @@ async def create_command_thread(forum_channel: ForumChannel):
     content = (
             "**Tournament Discord Bot Instructions**\n"
             "This thread is used to create new tournaments and manage existing tournaments. Existing tournaments can also be managed in their respective threads.\n\n"
-            "To create a new tournament use `/tournament create`.\n\n"
-            "To view a list of possible tournament commands, use `/tournament help`.\n\n")
+            "To create a new tournament use `/t create`.\n\n"
+            "To view a list of possible tournament commands, use `/t help`.\n\n")
     command_thread, command_message = await forum_channel.create_thread(name=name, content=content)
     await command_thread.edit(pinned=True)
     return command_thread, command_message

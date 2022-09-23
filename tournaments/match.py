@@ -126,10 +126,25 @@ async def vote_match_button(interaction: Interaction, button: Button):
     if not db_match or db_match['completed']:
         return False
     
-    # Call main vote_reaction function
-    return await vote_button(interaction, button, match_message, db_guild, db_match, db_tournament)
+    # Call main vote recording function
+    return await record_vote(interaction, button.emoji.name, match_message, db_guild, db_match, db_tournament)
 
-async def vote_button(interaction: Interaction, button: Button, match_message: Message,
+async def vote_match(interaction: Interaction, match_challonge_id: int, vote: str):
+    """
+    Vote for a match using a command.
+    """
+    guild: Guild = interaction.guild
+    channel: TextChannel = interaction.channel
+    user: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
+    vote_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, vote)
+    if not vote_emote:
+        return False
+    match_message: Message = await channel.fetch_message(db_match['id'])
+    # Call main vote recording function
+    return await record_vote(interaction, vote_emote, match_message, db_guild, db_match, db_tournament)
+
+async def record_vote(interaction: Interaction, vote_emoji: str, match_message: Message,
                         db_guild: dict, db_match: dict, db_tournament: dict=None):
     """
     Main function for voting on match results by buttons.
@@ -154,10 +169,10 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
         await interaction.followup.send(f"Vote failed. This match has already been completed.", ephemeral=True)
         return False
     # Check if switching vote
-    switched = voter['vote'] is not None and voter['vote'] != button.emoji.name
+    switched = voter['vote'] is not None and voter['vote'] != vote_emoji
     # Record vote or remove vote
-    if voter['vote'] != button.emoji.name:
-        vote = button.emoji.name
+    if voter['vote'] != vote_emoji:
+        vote = vote_emoji
         action = "Added" if not voter['vote'] else "Changed"
     else:
         if opponent['vote'] is not None:
@@ -223,24 +238,6 @@ async def vote_button(interaction: Interaction, button: Button, match_message: M
         await interaction.followup.send(f"Successfully removed vote.", ephemeral=True)
     return True
 
-    # Otherwise, give other player 2 minutes to vote
-    # if payload.event_type == 'REACTION_ADD': # TODO: Test what happens if other player votes between time
-    #     await asyncio.sleep(10) # TODO: change to 120 seconds
-    #     # REDO LOGIC:
-    #     # Make sure vote is the same as previous
-    #     # If there are no votes, then cancel
-    #     match_embed.set_footer("")
-    #     check_tournament = _tournament.find_active_tournament(db_guild)
-    #     check_match = find_match(check_tournament, db_match['id'])
-    #     if not (check_match['player1']['vote'] and check_match['player2']['vote']):
-    #         if db_tournament:
-    #             await report_match(match_message, db_guild, db_tournament, db_match, vote)
-    #             print("Match vote timed out.")
-    #         else:
-    #             await _challenge.report_challenge(match_message, db_guild, db_match, vote)
-    #             print("Match vote timed out.")
-    # return True
-
 async def report_match(match_message: Message, db_guild: dict, db_tournament: dict, db_match: dict, winner_emote: str, is_dq: bool=False):
     """
     Reports a match winner and fetches the next matches that have not yet been called.
@@ -286,7 +283,7 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
         return None, None
     # Check if last match
     if len(challonge_matches) == 0 and db_match['round'] == db_tournament['num_rounds']:
-        await match_message.channel.send(f"***{tournament_name}*** has been completed! Use `/tournament finalize {tournament_name}` to finalize the results!")
+        await match_message.channel.send(f"***{tournament_name}*** has been completed! Use `/t finalize {tournament_name}` to finalize the results!")
         return db_match, winner
     for challonge_match in challonge_matches:
         # Check if match has already been called (in database)
@@ -327,45 +324,9 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     channel: TextChannel = interaction.channel
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
-    usage = "Usage: `$tournament report <match_id> <participant_name | 1️⃣ | 2️⃣>`"
-    # Fetch active tournament
-    db_tournament = _tournament.find_active_tournament(db_guild)
-    if not db_tournament:
-        await interaction.followup.send(f"There are currently no active tournaments.", ephemeral=True)
-        return False
-    # Only allow author or guild admins to manually report results
-    if user.id != db_tournament['author']['id'] or not user.guild_permissions.administrator:
-        await interaction.followup.send(f"Only the author or server admins can override match results.", ephemeral=True)
-        return False
-    # Check if provided emote
-    valid1 = ['1', '1️⃣']
-    valid2 = ['2', '2️⃣']
-    winner_emote = None
-    if winner in valid1:
-        winner_emote = '1️⃣'
-    elif winner in valid2:
-        winner_emote = '2️⃣'
-    # Get match
-    try:
-        db_match = find_match_by_challonge_id(db_tournament, match_challonge_id)
-    except Exception as e:
-        printlog(f"Failed to find match ['challonge_id'='{match_challonge_id}'].", e)
-        await interaction.followup.send(f"Something went wrong when finding the match.", ephemeral=True)
-        return False
-    if not db_match:
-        await interaction.followup.send(f"Invalid challonge id.", ephemeral=True)
-        return False
-    # Find by name if applicable
+    winner_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, winner)
     if not winner_emote:
-        player1 = _participant.find_participant(db_tournament, db_match['player1']['id'])
-        player2 = _participant.find_participant(db_tournament, db_match['player2']['id'])
-        if player1['name'].lower() == winner.lower():
-            winner_emote = '1️⃣'
-        elif player2['name'].lower() == winner.lower():
-            winner_emote = '2️⃣'
-        else:
-            await interaction.followup.send(f"There is no participant named '{winner}' in this match.\n{usage}", ephemeral=True)
-            return False
+        return False
     # Check if actually changing the winner
     if db_match['winner_emote'] is not None and winner_emote == db_match['winner_emote']:
         await interaction.followup.send("Match report failed; Winner is the same.", ephemeral=True)
@@ -434,6 +395,48 @@ async def set_match(guild_id: int, db_tournament: dict, db_match: dict):
     match_index = _tournament.find_index_in_tournament(db_tournament, MATCHES, 'id', db_match['id'])
     db_tournament['matches'][match_index] = db_match
     return await _tournament.set_tournament(guild_id, tournament_name, db_tournament)
+
+async def parse_vote(interaction: Interaction, db_guild: dict, match_challonge_id: int, vote: str):
+    """
+    Parses a vote argument that can either be an emote (1 or 2) or a player name.
+    """
+    # Fetch active tournament
+    db_tournament = _tournament.find_active_tournament(db_guild)
+    if not db_tournament:
+        await interaction.followup.send(f"There are currently no active tournaments.", ephemeral=True)
+        return (None, None, None)
+    # Get match
+    try:
+        db_match = find_match_by_challonge_id(db_tournament, match_challonge_id)
+    except Exception as e:
+        printlog(f"Failed to find match ['challonge_id'='{match_challonge_id}'].", e)
+        await interaction.followup.send(f"Something went wrong when finding the match.", ephemeral=True)
+        return (None, None, None)
+    if not db_match:
+        await interaction.followup.send(f"Invalid challonge id.", ephemeral=True)
+        return (None, None, None)
+    vote_emote = None
+    # Check if provided valid emote
+    valid1 = ['1', '1️⃣']
+    valid2 = ['2', '2️⃣']
+    if vote in valid1:
+        winner: dict = _participant.find_participant(db_tournament, db_match['player1']['id'])
+        vote_emote = '1️⃣'
+    elif vote in valid2:
+        winner: dict = _participant.find_participant(db_tournament, db_match['player2']['id'])
+        vote_emote = '2️⃣'
+    # Find by name if applicable
+    if not vote_emote:
+        player1 = _participant.find_participant(db_tournament, db_match['player1']['id'])
+        player2 = _participant.find_participant(db_tournament, db_match['player2']['id'])
+        if player1['name'].lower() == vote.lower():
+            vote_emote = '1️⃣'
+        elif player2['name'].lower() == vote.lower():
+            vote_emote = '2️⃣'
+        else:
+            await interaction.followup.send(f"There is no participant named '{winner}' in this match.", ephemeral=True)
+            return (None, None, None)
+    return (vote_emote, db_tournament, db_match)
 
 #######################
 ## MESSAGE FUNCTIONS ##

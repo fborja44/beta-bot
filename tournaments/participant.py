@@ -17,6 +17,30 @@ def find_participant(db_tournament: dict, participant_id):
         return result[0]
     return None
 
+async def join_tournament(interaction: Interaction, tournament_title: str):
+    """
+    Join a tournament through command instead of button.
+    """
+    guild: Guild = interaction.guild
+    db_guild = await _guild.find_add_guild(guild)
+    # Fetch tournament
+    db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)   
+    if not db_tournament:
+        return False
+    await add_participant(interaction, db_tournament)
+
+async def leave_tournament(interaction: Interaction, tournament_title: str):
+    """
+    Leave a tournament through command instead of button.
+    """
+    guild: Guild = interaction.guild
+    db_guild = await _guild.find_add_guild(guild)
+    # Fetch tournament
+    db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)   
+    if not db_tournament:
+        return False
+    await remove_participant(interaction, db_tournament)
+
 async def add_participant(interaction: Interaction, db_tournament: dict=None, member: Member=None, respond: bool=True):
     """
     Adds an participant to a tournament.

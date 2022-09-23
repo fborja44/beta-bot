@@ -53,6 +53,15 @@ def find_tournament_by_id(db_guild: dict, tournament_id: int):
         return result[0]
     return None
 
+def find_tournament_by_thread_id(db_guild: dict, thread_id: int):
+    """
+    Retrieves and returns a tournament document from the database (if it exists).
+    """
+    result = [tournament for tournament in db_guild['tournaments'] if tournament['thread_id'] == thread_id]
+    if result:
+        return result[0]
+    return None
+
 def find_active_tournament(db_guild: dict):
     """
     Returns the current active tournament in a guild.
@@ -497,7 +506,7 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
             await tournament_thread.edit(locked=True, pinned=False)
         except:
             print(f"Failed to edit thread for tournament '{tournament_title}' ['thread_id'='{db_tournament['thread_id']}'].")
-    await interaction.followup.send(f"Succesfully finalized tournament '***{tournament_title}***'.")
+    await interaction.followup.send(f"Successfully finalized tournament '***{tournament_title}***'.")
     return True
 
 async def send_results(interaction: Interaction, tournament_title: str):
@@ -768,7 +777,7 @@ async def edit_tournament_message(db_tournament: dict, channel: TextChannel):
             embed = image_embed
     if db_tournament['completed']:
         time_str = db_tournament['completed'].strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
-        embed.add_field(name=f'Completed At', value=f"{time_str}\nUse `/tournament results`", inline=False)
+        embed.add_field(name=f'Completed At', value=f"{time_str}\nUse `/t results`", inline=False)
     if db_tournament['thread_id']:
         content = status
     else:
