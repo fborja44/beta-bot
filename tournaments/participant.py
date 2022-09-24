@@ -27,6 +27,9 @@ async def join_tournament(interaction: Interaction, tournament_title: str):
     db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)   
     if not db_tournament:
         return False
+    # Check if in valid channel
+    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+        return False
     await add_participant(interaction, db_tournament)
 
 async def leave_tournament(interaction: Interaction, tournament_title: str):
@@ -38,6 +41,9 @@ async def leave_tournament(interaction: Interaction, tournament_title: str):
     # Fetch tournament
     db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)   
     if not db_tournament:
+        return False
+    # Check if in valid channel
+    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
         return False
     await remove_participant(interaction, db_tournament)
 

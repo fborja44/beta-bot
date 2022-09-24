@@ -66,7 +66,7 @@ async def create_challenge(interaction: Interaction, player_mention: str | None,
     if player_mention is not None and len(player_mention.strip()) > 0:
         matched_id = id_match.search(player_mention)
         if matched_id:
-            player2: Member = await guild.fetch_member(int(player_mention[3:-1]))
+            player2: Member = await guild.fetch_member(int(player_mention[3:-1])) # TODO: what if the player doesn't exist
         else:
             await interaction.followup.send(f"Invalid player mention.\n{usage}", ephemeral=True)
             return False

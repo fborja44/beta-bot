@@ -1,5 +1,6 @@
 from discord import app_commands, Interaction
 import guilds.channel as channel
+from tournaments import tournament
 
 # /channel app commands
 
@@ -17,11 +18,11 @@ async def delete(interaction: Interaction, channel_mention: str=""):
 
 
 @ChannelGroup.command(description="Set a channel to recieve tournament alerts.")
-async def alert(interaction: Interaction, channel_mention: str=""):
+async def alert(interaction: Interaction, tournament_channel: str, alert_channel: str = ""):
     await interaction.response.defer()
-    await channel.add_channel_to_alerts(interaction, channel_mention)
+    await channel.add_channel_to_alerts(interaction, tournament_channel, alert_channel)
 
 @ChannelGroup.command(description="Remove a channel from tournament alerts list.")
-async def remove_alert(interaction: Interaction, channel_mention: str=""):
+async def remove_alert(interaction: Interaction, tournament_channel: str, alert_channel: str = ""):
     await interaction.response.defer()
-    await channel.remove_channel_from_alerts(interaction, channel_mention)
+    await channel.remove_channel_from_alerts(interaction, tournament_channel, alert_channel)
