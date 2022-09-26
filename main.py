@@ -53,9 +53,9 @@ class MyBot(discord.Client):
             self.synced = True
         if not self.views:
             self.add_view(tournament.registration_buttons_view())
-            self.add_view(match.voting_buttons_view())
-            self.add_view(challenge.accept_view())
-            self.add_view(challenge.voting_buttons_view())
+            # self.add_view(match.voting_buttons_view())
+            # self.add_view(challenge.accept_view())
+            # self.add_view(challenge.voting_buttons_view())
             self.views = True
         # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
         # for guild in self.guilds:
@@ -81,16 +81,17 @@ intents.members = True
 bot_client = MyBot(intents=intents)
 tree = app_commands.CommandTree(bot_client)
 
+tree.add_command(channel_group.ChannelGroup, guild=TEST_GUILD)
+tree.add_command(channel_group.ChannelGroup, guild=discord.Object(id=713190806688628786))
+
 tree.add_command(tournament_group.TournamentGroup, guild=TEST_GUILD)
 tree.add_command(tournament_group.TournamentGroup, guild=discord.Object(id=713190806688628786))
 
-tree.add_command(challenge_group.ChallengeGroup, guild=TEST_GUILD)
-tree.add_command(challenge_group.ChallengeGroup, guild=discord.Object(id=713190806688628786))
+# tree.add_command(challenge_group.ChallengeGroup, guild=TEST_GUILD)
+# tree.add_command(challenge_group.ChallengeGroup, guild=discord.Object(id=713190806688628786))
 
-tree.add_command(leaderboard_group.LeaderboardGroup, guild=TEST_GUILD)
-tree.add_command(leaderboard_group.LeaderboardGroup, guild=discord.Object(id=713190806688628786))
+# tree.add_command(leaderboard_group.LeaderboardGroup, guild=TEST_GUILD)
+# tree.add_command(leaderboard_group.LeaderboardGroup, guild=discord.Object(id=713190806688628786))
 
-tree.add_command(channel_group.ChannelGroup, guild=TEST_GUILD)
-tree.add_command(channel_group.ChannelGroup, guild=discord.Object(id=713190806688628786))
 
 bot_client.run(TOKEN)

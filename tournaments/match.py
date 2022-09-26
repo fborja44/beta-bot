@@ -66,7 +66,14 @@ async def create_match(channel: TextChannel, guild: Guild, db_tournament: dict, 
 
     # Send embed message
     embed = create_match_embed(db_tournament, new_match)
-    match_message = await channel.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed, view=voting_buttons_view())
+    button_view = voting_buttons_view()
+    player1_button = discord.ui.Button(emoji='1️⃣', label=player1['name'], style=discord.ButtonStyle.grey, custom_id="1️⃣")
+    player1_button.callback = button_view.vote_player
+    player2_button = discord.ui.Button(emoji='2️⃣', label=player2['name'], style=discord.ButtonStyle.grey, custom_id="2️⃣")
+    player2_button.callback = button_view.vote_player
+    button_view.add_item(player1_button)
+    button_view.add_item(player2_button)
+    match_message = await channel.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed, view=button_view)
 
     # Add match document to database
     new_match['id'] = match_message.id
@@ -107,15 +114,20 @@ async def delete_match(channel: TextChannel, db_tournament: dict, match_id: int)
         return False
     return True
 
-async def vote_match_button(interaction: Interaction, button: Button):
+async def vote_match_button(interaction: Interaction, button_id: str):
     """
     Reports the winner for a tournament match using buttons.
+    button_id is expected to be 1️⃣ or 2️⃣.
     """
     channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     message: Message = interaction.message
     db_guild = await _guild.find_guild(guild.id)
     match_message: Message = await channel.fetch_message(message.id)
+
+    if button_id not in ['1️⃣', '2️⃣']:
+        await interaction.followup.send('Invalid vote.')
+        return False
 
     # Get current active tournament, if any
     db_tournament = _tournament.find_active_tournament(db_guild)
@@ -127,7 +139,7 @@ async def vote_match_button(interaction: Interaction, button: Button):
         return False
     
     # Call main vote recording function
-    return await record_vote(interaction, button.emoji.name, match_message, db_guild, db_match, db_tournament)
+    return await record_vote(interaction, button_id, match_message, db_guild, db_match, db_tournament)
 
 async def vote_match(interaction: Interaction, match_challonge_id: int, vote: str):
     """
@@ -358,15 +370,13 @@ class voting_buttons_view(discord.ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
-    @discord.ui.button(emoji='1️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player1")
-    async def vote_player1(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
+    async def vote_player(self: discord.ui.View, interaction: discord.Interaction):
+        """
+        Callback method for voting buttons.
+        """
         await interaction.response.defer(ephemeral=True)
-        await vote_match_button(interaction, button)
-
-    @discord.ui.button(emoji='2️⃣', style=discord.ButtonStyle.grey, custom_id="vote_player2")
-    async def vote_player2(self: discord.ui.View, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        await vote_match_button(interaction, button)
+        button_id = interaction.data['custom_id']
+        await vote_match_button(interaction, button_id)
 
 ######################
 ## HELPER FUNCTIONS ##
@@ -427,14 +437,18 @@ async def parse_vote(interaction: Interaction, db_guild: dict, match_challonge_i
         vote_emote = '2️⃣'
     # Find by name if applicable
     if not vote_emote:
-        player1 = _participant.find_participant(db_tournament, db_match['player1']['id'])
-        player2 = _participant.find_participant(db_tournament, db_match['player2']['id'])
-        if player1['name'].lower() == vote.lower():
+        player1_id = db_match['player1']['id']
+        player2_id = db_match['player2']['id']
+        participant: Member = _participant.parse_user_mention(interaction, vote)
+        if not participant:
+            await interaction.followup.send(f"Invalid vote. ex. 1️⃣, 2️⃣, or <@{interaction.client.user.id}>", ephemeral=True)
+            return (None, None, None)
+        if player1_id == participant.id:
             vote_emote = '1️⃣'
-        elif player2['name'].lower() == vote.lower():
+        elif player2_id == participant.id:
             vote_emote = '2️⃣'
         else:
-            await interaction.followup.send(f"There is no participant named '{winner}' in this match.", ephemeral=True)
+            await interaction.followup.send(f"User <@{participant.id}> is not a participant in this match.", ephemeral=True)
             return (None, None, None)
     return (vote_emote, db_tournament, db_match)
 
@@ -510,7 +524,7 @@ def edit_match_embed_confirmed(embed: Embed, match_id: int, player1: dict, playe
         winner = player2
         player2_emote = '⭐'
         player1_emote = '❌' if not is_dq else '🇩🇶'
-    embed.description = f"Winner: **{winner['name']}**\nFinished at {time}"
+    embed.description = f"Winner: <@{winner['id']}>\nFinished at {time}"
     embed.set_field_at(index=0, name=f"Players", value=f'{player1_emote} <@{player1_id}> vs <@{player2_id}> {player2_emote}', inline=False)
     if len(embed.fields) > 1:
         # Remove dispute field

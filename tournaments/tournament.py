@@ -469,7 +469,8 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     tournament_message = await channel.fetch_message(tournament_message_id)
     author: Member = await guild.fetch_member(db_tournament['author']['id']) or interaction.user
     new_tournament_embed = create_tournament_embed(db_tournament, author)
-    await tournament_message.edit(embed=new_tournament_embed, view=registration_buttons_view())
+    # TODO: Check if forum channel before editing content
+    await tournament_message.edit(content="Open for Registration 🚨", embed=new_tournament_embed, view=registration_buttons_view())
     await interaction.followup.send(f"Successfully reset tournament '***{tournament_title}***'.")
     return True
 
@@ -509,9 +510,19 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
         except:
             print(f"Could not find tournament on challonge ['challonge_id'='{challonge_id}'].")
             return False
+    # Update participants in database with placement
+    db_participants = db_tournament['participants']
+    ch_participants = final_tournament['participants']
+    for i in range (min(len(ch_participants), 8)):
+        ch_participant = ch_participants[i]['participant']
+        p_index = find_index_in_tournament(db_tournament, 'participants', 'challonge_id', ch_participant['id'])
+        db_participants[p_index].update({'placement': ch_participant['final_rank']})
+    db_tournament['participants'] = db_participants
+    await set_tournament(guild.id, tournament_title, db_tournament)
+
     # Create results message
     db_tournament['completed'] = completed_time # update completed time
-    embed = create_results_embed(db_tournament, final_tournament['participants'])
+    embed = create_results_embed(db_tournament)
     result_message = await channel.send(content=f"'***{tournament_title}***' has been finalized. Here are the results!", embed=embed) # Reply to original tournament message
     # Set tournament to completed in database
     try: 
@@ -556,7 +567,7 @@ async def send_results(interaction: Interaction, tournament_title: str):
         print(f"Could not find tournament on challonge ['challonge_id'='{challonge_id}'].")
         return False
     # Create results message
-    embed = create_results_embed(db_tournament, final_tournament['participants'])
+    embed = create_results_embed(db_tournament)
     await interaction.followup.send(embed=embed) # Reply to original tournament message
     return True
 
@@ -836,7 +847,7 @@ def create_tournament_image(db_tournament: dict, embed: Embed):
         printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].")
         return False
 
-def create_results_embed(db_tournament: dict, participants: list):
+def create_results_embed(db_tournament: dict):
     """
     Creates embed object with final results to include after finalizing tournament.
     """
@@ -848,19 +859,21 @@ def create_results_embed(db_tournament: dict, participants: list):
     # Author field
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     results_content = ""
-    participants.sort(key=(lambda participant: participant['participant']['final_rank']))
+    db_participants = db_tournament['participants']
+    db_participants.sort(key=(lambda participant: participant['placement']))
     # List placements
-    for i in range (min(len(participants), 8)):
-        participant = participants[i]['participant']
-        match participant['final_rank']:
+    for i in range (min(len(db_participants), 8)):
+        db_participant = db_participants[i]
+        mention = f"<@{db_participant['id']}>"
+        match db_participant['placement']:
             case 1:
-                results_content += f"> 🥇  {participant['name']}\n"
+                results_content += f"> 🥇 {mention}\n"
             case 2:
-                results_content += f"> 🥈  {participant['name']}\n"
+                results_content += f"> 🥈 {mention}\n"
             case 3:
-                results_content += f"> 🥉  {participant['name']}\n"
+                results_content += f"> 🥉 {mention}\n"
             case _:
-                results_content += f"> **{participant['final_rank']}.** {participant['name']}\n"
+                results_content += f"> **{db_participant['placement']}.** {mention}\n"
     embed.add_field(name=f'Placements', value=results_content, inline=False)
     # Other info fields
     embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)

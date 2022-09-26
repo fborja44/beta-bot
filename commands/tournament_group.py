@@ -73,9 +73,9 @@ async def vote(interaction: Interaction, match_id: int, vote: str):
     await match.vote_match(interaction, match_id, vote.strip())
 
 @TournamentGroup.command(description="Disqualifies or removes an participant from a tournament bracket.")
-async def disqualify(interaction: Interaction, participant_name: str, tournament_title: str=""):
+async def disqualify(interaction: Interaction, user_mention: str, tournament_title: str=""):
     await interaction.response.defer()
-    await participant.disqualify_participant_main(interaction, participant_name.strip(), tournament_title.strip())
+    await participant.disqualify_participant_main(interaction, user_mention.strip(), tournament_title.strip())
 
 # @TournamentGroup.command(description="Disqualifies self from a tournament bracket.")
 # async def disqualify_self(interaction: Interaction):

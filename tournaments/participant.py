@@ -4,9 +4,12 @@ from tournaments import match as _match, tournament as _tournament
 from guilds import guild as _guild
 from utils.logger import printlog
 import challonge
+import re
 
 # participant.py
 # Tournament participant functions
+
+user_match = re.compile(r'^<@[0-9]+>$')
 
 def find_participant(db_tournament: dict, participant_id):
     """
@@ -88,7 +91,8 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
         'challonge_id': response['id'],
         'name': user.name, 
         'placement': None,
-        'active': True
+        'active': True,
+        'placement': None,
         }
     try:
         updated_guild = await _tournament.add_to_tournament(guild.id, tournament_title, 'participants', new_participant)
@@ -167,7 +171,7 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
     if respond: await interaction.followup.send(f"Successfully removed from '***{tournament_title}***'.", ephemeral=True)
     return True
 
-async def disqualify_participant_main(interaction: Interaction, participant_name: str, tournament_title: str=""):
+async def disqualify_participant_main(interaction: Interaction, user_mention: str, tournament_title: str=""):
     """
     Destroys an participant from a tournament or DQs them if the tournament has already started from a command.
     Main function.
@@ -178,18 +182,24 @@ async def disqualify_participant_main(interaction: Interaction, participant_name
     db_guild = await _guild.find_add_guild(guild)
     # usage = 'Usage: `$tournament dq <participant name>`. There must be an active tournament, or must be in a reply to a tournament message.'
     # Retrieve tournament
-    db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title, active=True)
+    db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament:
         return False
     # Check if in valid channel
     if not await _tournament.valid_tournament_channel(db_tournament, interaction):
         return False
+    # Check if valid participant mention
+    participant: Member = parse_user_mention(interaction, user_mention)
+    if not participant:
+        await interaction.followup.send(f"Invalid user mention for `user_mention`. ex. <@{interaction.client.user.id}>", ephemeral=True)
+        return False
     # Only allow author, guild admins, or self to dq a user
-    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator and user.name != participant_name:
-        await interaction.followup.send(f"Only the author or server admins can disqualify/remove participants from tournaments.", ephemeral=True)
+    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator and user.id != participant.id:
+        await interaction.followup.send(f"Only the author or server admins can disqualify/remove participants from tournaments, or participants must disqualify/remove themselves.", ephemeral=True)
         return False
     tournament_title = db_tournament['title']
     # Check if participant exists
+    participant_name = participant.name
     db_participant = None
     for elem in db_tournament['participants']:
         if elem['name'].lower() == participant_name.lower():
@@ -260,3 +270,20 @@ async def disqualify_participant(channel: TextChannel, db_guild: dict, db_tourna
         match_message = await channel.fetch_message(db_match['id'])
         await _match.report_match(match_message, db_guild, db_tournament, db_match, winner_emote, is_dq=True)
     return True
+
+######################
+## HELPER FUNCTIONS ##
+######################
+
+def parse_user_mention(interaction: Interaction, user_mention: str):
+    """
+    Parses a channel mention argument.
+    """
+    if user_mention is not None and len(user_mention.strip()) > 0:
+        matched_user_id = user_match.search(user_mention)
+        if matched_user_id:
+            return interaction.guild.get_member(int(user_mention[2:-1])) or None
+        else:
+            return None
+    else: 
+        return interaction.user
