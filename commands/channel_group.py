@@ -4,7 +4,12 @@ from tournaments import tournament
 
 # /channel app commands
 
-ChannelGroup = app_commands.Group(name="channel", description="Channel configuration commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+ChannelGroup = app_commands.Group(name="ch", description="Channel configuration commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
+
+@ChannelGroup.command(description="Lists options for tournament channel commands.")
+async def help(interaction: Interaction):
+    help_embed = channel.create_help_embed(interaction)
+    await interaction.response.send_message(embed=help_embed, ephemeral=True)
 
 @ChannelGroup.command(description="Creates a tournament channel. Forum Channels are recommended if available.")
 async def create(interaction: Interaction, channel_name: str, is_forum: bool, allow_messages: bool= True, category_name: str = ""):

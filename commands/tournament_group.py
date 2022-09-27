@@ -9,7 +9,8 @@ TournamentGroup = app_commands.Group(name="t", description="Tournament bracket c
 
 @TournamentGroup.command(description="Lists options for tournament bracket commands.")
 async def help(interaction: Interaction):
-    await interaction.response.send_message("help deez 😎")
+    help_embed = tournament.create_help_embed(interaction)
+    await interaction.response.send_message(embed=help_embed, ephemeral=True)
 
 @TournamentGroup.command(description="[Privileged] Creates a test tournament bracket.")
 async def test(interaction: Interaction, num_participants: int = 4):
@@ -17,50 +18,60 @@ async def test(interaction: Interaction, num_participants: int = 4):
     await tournament.create_test_tournament(interaction, num_participants)
 
 @TournamentGroup.command(description="Creates a tournament bracket. Times in ET. Default: double elimination.")
-async def create(interaction: Interaction, tournament_title: str, time: str="", single_elim: bool = False, max_participants: int = MAX_ENTRANTS):
+async def create(interaction: Interaction, title: str, time: str="", single_elim: bool = False, max_participants: int = MAX_ENTRANTS):
     await interaction.response.defer(ephemeral=True)
-    await tournament.create_tournament(interaction, tournament_title.strip(), time.strip(), single_elim, max_participants)
+    await tournament.create_tournament(interaction, title.strip(), time.strip(), single_elim, max_participants)
 
 @TournamentGroup.command(description="Join a tournament bracket.")
-async def join(interaction: Interaction, tournament_title: str=""):
+async def join(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
-    await participant.join_tournament(interaction, tournament_title.strip())
+    await participant.join_tournament(interaction, title.strip())
 
 @TournamentGroup.command(description="Join a tournament bracket.")
-async def leave(interaction: Interaction, tournament_title: str=""):
+async def leave(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
-    await participant.leave_tournament(interaction, tournament_title.strip())
+    await participant.leave_tournament(interaction, title.strip())
+
+@TournamentGroup.command(description="Display the seeding for a tournament bracket.")
+async def seeding(interaction: Interaction, title: str=""):
+    await interaction.response.defer()
+    await tournament.send_seeding(interaction, title.strip())
+
+@TournamentGroup.command(description="Randomize the seeding for a tournament bracket.")
+async def randomize(interaction: Interaction, title: str=""):
+    await interaction.response.defer(ephemeral=True)
+    await participant.randomize_seeding(interaction, title.strip())
 
 @TournamentGroup.command(description="Deletes a tournament bracket.")
-async def delete(interaction: Interaction, tournament_title: str=""):
+async def delete(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
-    await tournament.delete_tournament(interaction, tournament_title.strip())
+    await tournament.delete_tournament(interaction, title.strip())
 
-@TournamentGroup.command(description="Updates a tournament bracket. Times in ET.")
-async def update(interaction: Interaction, tournament_title: str, new_tournament_title: str | None = None, time: str | None = None, 
+@TournamentGroup.command(description="Updates a tournament bracket. Times in ET.") # TODO: fix
+async def update(interaction: Interaction, title: str, new_title: str | None = None, time: str | None = None, 
                     single_elim: bool | None = None, max_participants: int | None = None):
     await interaction.response.defer(ephemeral=True)
-    await tournament.update_tournament(interaction, tournament_title.strip(), new_tournament_title.strip(), time.strip(), single_elim, max_participants)
+    await tournament.update_tournament(interaction, title.strip(), new_title.strip(), time.strip(), single_elim, max_participants)
 
 @TournamentGroup.command(description="Starts a tournament bracket.")
-async def start(interaction: Interaction, tournament_title: str=""):
+async def start(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
-    await tournament.start_tournament(interaction, tournament_title.strip())
+    await tournament.start_tournament(interaction, title.strip())
 
 @TournamentGroup.command(description="Resets a tournament bracket.")
-async def reset(interaction: Interaction, tournament_title: str=""):
+async def reset(interaction: Interaction, title: str=""):
     await interaction.response.defer()
-    await tournament.reset_tournament(interaction, tournament_title.strip())
+    await tournament.reset_tournament(interaction, title.strip())
 
 @TournamentGroup.command(description="Finalizes a tournament bracket.")
-async def finalize(interaction: Interaction, tournament_title: str=""):
+async def finalize(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
-    await tournament.finalize_tournament(interaction, tournament_title.strip())
+    await tournament.finalize_tournament(interaction, title.strip())
 
 @TournamentGroup.command(description="Sends the results for a completed tournament bracket.")
-async def results(interaction: Interaction, tournament_title: str=""):
+async def results(interaction: Interaction, title: str=""):
     await interaction.response.defer()
-    await tournament.send_results(interaction, tournament_title.strip())
+    await tournament.send_results(interaction, title.strip())
 
 @TournamentGroup.command(description="Manually reports the result for a tournament bracket match.")
 async def report(interaction: Interaction, match_id: int, winner: str):
@@ -73,9 +84,9 @@ async def vote(interaction: Interaction, match_id: int, vote: str):
     await match.vote_match(interaction, match_id, vote.strip())
 
 @TournamentGroup.command(description="Disqualifies or removes an participant from a tournament bracket.")
-async def disqualify(interaction: Interaction, user_mention: str, tournament_title: str=""):
+async def disqualify(interaction: Interaction, user_mention: str, title: str=""):
     await interaction.response.defer()
-    await participant.disqualify_participant_main(interaction, user_mention.strip(), tournament_title.strip())
+    await participant.disqualify_participant_main(interaction, user_mention.strip(), title.strip())
 
 # @TournamentGroup.command(description="Disqualifies self from a tournament bracket.")
 # async def disqualify_self(interaction: Interaction):

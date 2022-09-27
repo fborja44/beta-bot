@@ -110,8 +110,6 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
     thread: Thread = interaction.channel if 'thread' in str(interaction.channel.type) else None
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
-    # Check args
-    # usage = 'Usage: `$tournament create <name> [time]`'
     # Check if in a valid tournament channel/thread
     tournament_channel = None
     if 'thread' in str(interaction.channel.type):
@@ -238,6 +236,21 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
         except: pass
         return None, None, None
 
+async def send_seeding(interaction: Interaction, tournament_title: str):
+    """
+    Sends the seeding for a tournament.
+    """
+    guild: Guild = interaction.guild
+    db_guild = await _guild.find_guild(guild.id)
+    # Fetch tournament
+    db_tournament, tournament_title = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
+    if not db_tournament:
+        return False
+    # Create seeding message
+    embed = create_seeding_embed(db_tournament)
+    await interaction.followup.send(embed=embed)
+    return True   
+
 async def delete_tournament(interaction: Interaction, tournament_title: str, respond: bool=True):
     """
     Deletes the specified tournament (if it exists).
@@ -247,7 +260,6 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     # Fetch tournament
-    # usage = 'Usage: `$tournament delete [title]`'
     db_tournament, tournament_title = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
     retval = True
     if not db_tournament:
@@ -302,7 +314,6 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     # Fetch tournament
-    # usage = 'Usage: `$tournament update [name]`'
     db_tournament, tournament_title = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament: 
         return False
@@ -368,7 +379,6 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
     # Fetch tournament
-    # usage = 'Usage: `$tournament start [title]`'
     db_tournament, tournament_title = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament: 
         return False
@@ -437,7 +447,6 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     # Fetch tournament
-    # usage = 'Usage: `$tournament reset [title]`'
     db_tournament, tournament_title = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament:
         return False
@@ -483,7 +492,6 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     # Fetch tournament
-    # usage = 'Usage: `$tournament finalize [title]`'
     completed_time = datetime.now(tz=EASTERN_ZONE)
     db_tournament, tournament_title = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament:
@@ -551,24 +559,16 @@ async def send_results(interaction: Interaction, tournament_title: str):
     guild: Guild = interaction.guild
     db_guild = await _guild.find_guild(guild.id)
     # Fetch tournament
-    # usage = 'Usage: `$tournament results <title>`'
     db_tournament, tournament_title = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
-    challonge_id = db_tournament['challonge']['id']
     if not db_tournament:
         return False
     # Check if tournament is completed
     if not db_tournament['completed']:
         await interaction.followup.send(f"'***{tournament_title}***' has not yet been finalized.", ephemeral=True)
         return False
-    # Retrive challonge tournament information
-    try: 
-        final_tournament = challonge.tournaments.show(challonge_id, include_participants=1, include_matches=1)
-    except:
-        print(f"Could not find tournament on challonge ['challonge_id'='{challonge_id}'].")
-        return False
     # Create results message
-    embed = create_results_embed(db_tournament)
-    await interaction.followup.send(embed=embed) # Reply to original tournament message
+    results_embed = create_results_embed(db_tournament)
+    await interaction.followup.send(embed=results_embed)
     return True
 
 ##################
@@ -847,6 +847,31 @@ def create_tournament_image(db_tournament: dict, embed: Embed):
         printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].")
         return False
 
+def create_seeding_embed(db_tournament: dict):
+    """
+    Creates embed object with final results to include after finalizing tournament.
+    """
+    tournament_title = db_tournament['title']
+    challonge_url = db_tournament['challonge']['url']
+    # jump_url = db_tournament['jump_url']
+    # Main embed
+    embed = Embed(title=f"Seeding for '{tournament_title}'", color=WOOP_PURPLE)
+    # Author field
+    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    seeding_content = ""
+    db_participants = db_tournament['participants']
+    db_participants.sort(key=(lambda participant: participant['seed']))
+    # List placements
+    for i in range (min(len(db_participants), 8)):
+        db_participant = db_participants[i]
+        mention = f"<@{db_participant['id']}>"
+        seeding_content += f"> **{db_participant['seed']}.** {mention}\n"
+    embed.add_field(name=f'Seeding', value=seeding_content, inline=False)
+    # Other info fields
+    embed.add_field(name=f'Bracket Link', value=challonge_url, inline=False)
+    # embed.set_footer(text=f'To update seeding, use `/t seed`')
+    return embed
+
 def create_results_embed(db_tournament: dict):
     """
     Creates embed object with final results to include after finalizing tournament.
@@ -894,6 +919,76 @@ def create_info_embed(db_tournament: dict):
     embed.add_field(name='Tournament Type', value=db_tournament['tournament_type'].title())
     time_str = time.strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
     embed.add_field(name='Starting At', value=time_str)
+    return embed
+
+def create_help_embed(interaction: Interaction):
+    embed = Embed(title=f'❔ Tournament Help', color=WOOP_PURPLE)
+    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    # Create
+    create_value = """Create a tournament using Discord.
+                    `/t create title: GENESIS 9`
+                    `/t create title: The Big House 10 time: 10:00 PM`
+                    `/t create title: Low Tier City single_elim: True max_participants: 12`"""
+    embed.add_field(name='/t create', value=create_value, inline=False)
+    # Join
+    join_value = """Join a tournament in registration phase.
+                    `/t join`
+                    `/t join title: GENESIS 9`"""
+    embed.add_field(name='/t join', value=join_value, inline=False)
+    # Leave
+    leave_value = """Leave a tournament in registration phase.
+                    `/t leave`
+                    `/t leave title: GENESIS 9`"""
+    embed.add_field(name='/t leave', value=leave_value, inline=False)
+    # Delete
+    delete_value = """Delete a tournament.
+                    `/t delete`
+                    `/t delete title: GENESIS 9`"""
+    embed.add_field(name='/t delete', value=delete_value, inline=False)
+    # Update
+    update_value = """Updates a tournament according to specified fields.
+                    `/t update title: GENESIS 9 new_title: GENESIS 10`
+                    `/t update title: The Big House 10 time: 9:30 PM`
+                    `/t update title: Low Tier city single_elim: False max_participants: 16`"""
+    embed.add_field(name='/t update', value=update_value, inline=False)
+    # Start
+    start_value = """Starts a tournament with at least 2 participants.
+                    `/t start`
+                    `/t start title: GENESIS 9`"""
+    embed.add_field(name='/t start', value=start_value, inline=False)
+    # Reset
+    reset_value = """Resets a tournament back to registration phase.
+                    `/t reset`
+                    `/t reset title: GENESIS 9`"""
+    embed.add_field(name='/t reset', value=reset_value, inline=False)
+    # Finalize
+    finalize_value = """Finalizes the results of a tournament if available.
+                    `/t finalize`
+                    `/t finalize title: GENESIS 9`"""
+    embed.add_field(name='/t finalize', value=finalize_value, inline=False)
+    # Results
+    results_value = """Displays the results of a finalized tournament if available.
+                    `/t results`
+                    `/t results title: GENESIS 9`"""
+    embed.add_field(name='/t results', value=results_value, inline=False)
+    # Vote
+    vote_value = f"""Vote for a winner in a tournament match.
+                    `/t vote match_id: 1034908912 vote: ` <@{interaction.client.user.id}>
+                    `/t vote match_id: 1034908912 vote: 1️⃣`
+                    `/t vote match_id: 1034908912 vote: 1`"""
+    embed.add_field(name='/t vote', value=vote_value, inline=False)
+    # Report
+    report_value = f"""[ADMIN] Manually report the result of a tournament match.
+                    `/t report match_id: 1034908912 winner: ` <@{interaction.client.user.id}>
+                    `/t report match_id: 1034908912 winner: 1️⃣`
+                    `/t report match_id: 1034908912 winner: 1`"""
+    embed.add_field(name='/t report', value=report_value, inline=False)
+    # Disqualify
+    disqualify_value = f"""Vote for a winner in a tournament match.
+                    `/t vote match_id: 1034908912 vote: ` <@{interaction.client.user.id}>
+                    `/t vote match_id: 1034908912 vote: 1️⃣`
+                    `/t vote match_id: 1034908912 vote: 1`"""
+    embed.add_field(name='/t disqualify', value=disqualify_value, inline=False)
     return embed
 
 #######################

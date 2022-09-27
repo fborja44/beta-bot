@@ -1,5 +1,6 @@
 from discord import Embed, ForumChannel, Guild, Interaction, Message, Member, TextChannel, CategoryChannel, Thread
-from utils.common import TOURNAMENTS
+from utils.color import WOOP_PURPLE
+from utils.common import ICON, TOURNAMENTS
 from utils.logger import printlog, printlog_msg
 from tournaments import tournament as _tournament
 from pprint import pprint
@@ -280,6 +281,57 @@ async def remove_channel_from_alerts(interaction: Interaction, tournament_channe
     await interaction.followup.send(f"<#{channel.id}> will no longer receive tournament alerts.")
     return True
 
+def create_help_embed(interaction: Interaction):
+    embed = Embed(title=f'❔ Channel Help', color=WOOP_PURPLE)
+    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    # Create
+    create_value = """Create a tournament channel.
+                    `/ch create channel_name: ssbm is_forum: True`
+                    `/ch create channel_name: ssbm is_forum: False allow_messages: False`
+                    `/ch create channel_name: ssbm is_forum: False category_name: games`"""
+    embed.add_field(name='/ch create', value=create_value, inline=False)
+    # Join
+    delete_value = f"""Delete a tournament channel.
+                    `/ch delete`
+                    `/ch delete channel_mention: `<#{interaction.channel_id}>"""
+    embed.add_field(name='/ch join', value=delete_value, inline=False)
+    # Add Alert
+    alert_value = f"""Send alerts for a tournament channel to a text channel.
+                    `/ch alert tournament_channel: `<#{interaction.channel_id}>
+                    `/ch alert tournament_channel: `<#{interaction.channel_id}> `alert_channel: `<#{interaction.guild.text_channels[0].id}>"""
+    embed.add_field(name='/ch leave', value=alert_value, inline=False)
+    # Remove Alert
+    remove_alert_value = f"""Removes a text channel from receiving alerts.
+                    `/ch remove_alert tournament_channel: `<#{interaction.channel_id}>
+                    `/ch remove_alert tournament_channel: `<#{interaction.channel_id}> `alert_channel: `<#{interaction.guild.text_channels[0].id}>"""
+    embed.add_field(name='/ch delete', value=remove_alert_value, inline=False)
+    # Update
+    update_value = """Updates a tournament according to specified fields.
+                    `/ch update title: GENESIS 9 new_title: GENESIS 10`
+                    `/ch update title: The Big House 10 time: 9:30 PM`
+                    `/ch update title: Low Tier city single_elim: False max_participants: 16`"""
+    embed.add_field(name='/ch update', value=update_value, inline=False)
+    # Start
+    start_value = """Starts a tournament with at least 2 participants.
+                    `/ch start`
+                    `/ch start title: GENESIS 9`"""
+    embed.add_field(name='/ch start', value=start_value, inline=False)
+    # Reset
+    reset_value = """Resets a tournament back to registration phase.
+                    `/ch reset`
+                    `/ch reset title: GENESIS 9`"""
+    embed.add_field(name='/ch reset', value=reset_value, inline=False)
+    # Finalize
+    finalize_value = """Finalizes the results of a tournament if available.
+                    `/ch finalize`
+                    `/ch finalize title: GENESIS 9`"""
+    embed.add_field(name='/ch finalize', value=finalize_value, inline=False)
+    # Results
+    results_value = """Displays the results of a finalized tournament if available.
+                    `/ch results`
+                    `/ch results title: GENESIS 9`"""
+    embed.add_field(name='/ch results', value=results_value, inline=False)
+    return embed
 
 ######################
 ## HELPER FUNCTIONS ##
