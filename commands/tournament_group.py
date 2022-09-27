@@ -9,8 +9,8 @@ TournamentGroup = app_commands.Group(name="t", description="Tournament bracket c
 
 @TournamentGroup.command(description="Lists options for tournament bracket commands.")
 async def help(interaction: Interaction):
-    help_embed = tournament.create_help_embed(interaction)
-    await interaction.response.send_message(embed=help_embed, ephemeral=True)
+    help_embed, help_view = tournament.create_help_embed(interaction)
+    await interaction.response.send_message(embed=help_embed, view=help_view, ephemeral=True)
 
 @TournamentGroup.command(description="[Privileged] Creates a test tournament bracket.")
 async def test(interaction: Interaction, num_participants: int = 4):
@@ -37,7 +37,7 @@ async def seeding(interaction: Interaction, title: str=""):
     await interaction.response.defer()
     await tournament.send_seeding(interaction, title.strip())
 
-@TournamentGroup.command(description="Randomize the seeding for a tournament bracket.")
+@TournamentGroup.command(description="Sets the seed for a participant in a tournament bracket.")
 async def seed(interaction: Interaction, user_mention: str, seed: int, title: str=""):
     await interaction.response.defer(ephemeral=True)
     await participant.set_seed(interaction, user_mention.strip(), seed, title.strip())

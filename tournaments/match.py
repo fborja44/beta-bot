@@ -147,9 +147,11 @@ async def vote_match(interaction: Interaction, match_challonge_id: int, vote: st
     """
     guild: Guild = interaction.guild
     channel: TextChannel = interaction.channel
-    user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     vote_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, vote)
+    # Check if in valid channel
+    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+        return False
     if not vote_emote:
         return False
     match_message: Message = await channel.fetch_message(db_match['id'])
@@ -337,6 +339,9 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     winner_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, winner)
+    # Check if in valid channel
+    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+        return False
     if not winner_emote:
         return False
     # Check if actually changing the winner
@@ -430,10 +435,10 @@ async def parse_vote(interaction: Interaction, db_guild: dict, match_challonge_i
     valid1 = ['1', '1️⃣']
     valid2 = ['2', '2️⃣']
     if vote in valid1:
-        winner: dict = _participant.find_participant(db_tournament, db_match['player1']['id'])
+        # winner: dict = _participant.find_participant(db_tournament, db_match['player1']['id'])
         vote_emote = '1️⃣'
     elif vote in valid2:
-        winner: dict = _participant.find_participant(db_tournament, db_match['player2']['id'])
+        # winner: dict = _participant.find_participant(db_tournament, db_match['player2']['id'])
         vote_emote = '2️⃣'
     # Find by name if applicable
     if not vote_emote:

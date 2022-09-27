@@ -1,7 +1,7 @@
 # **beta-bot**
 **beta-bot** is an interactive discord bot using the [discord.py](https://discordpy.readthedocs.io/en/stable/) [2.0] library to create and administrate tournaments through Discord text channels using the [Discord API](https://discord.com/developers/docs/intro).
 
-Brackets are generated using the [Challonge.com API](https://api.challonge.com/v1). Bracket images are created and hosted on imgur using the [Imgur API](https://apidocs.imgur.com/).
+Tournaments are generated using the [Challonge.com API](https://api.challonge.com/v1). bracket images are created and hosted on imgur using the [Imgur API](https://apidocs.imgur.com/).
 
 All data is stored using MongoDB through the [PyMongo](https://pymongo.readthedocs.io/en/stable/) library.
 
@@ -15,85 +15,117 @@ All data is stored using MongoDB through the [PyMongo](https://pymongo.readthedo
 ## Commands
 All commands use the `/` prefix and `/slash command` feature of Discord for help with validation, error handling, and parameter autofill/documentation.
 
-### Brackets
+## Permissions
+**beta-bot** requires thread permissions and `members` intents to operate properly. All tournaments generated are created as messages. If these permissions are not given, tournaments will not be able to be created. This is to improve organization and avoid unnecessary spam in Discord text channels.
+
+### Tournaments
+Tournaments must be created in designiated tournament channels. To see the list of channel commands, see the [Channels](#Channels) section.
+#### Help
+`/t help`
+- Sends a list of tournament commands.
+
 #### Create
-`/bracket create <bracket_title: str> [time: str] [single_elim: bool] [max_entrants: int]`:
-- Creates a new bracket with the provided name and time. Times in EST.
-- Default start time is 1 hour ahead of current time. 
+`/t create <title: str> [time: str] [single_elim: bool] [max_entrants: int]`:
+- Creates a new tournament with the provided name and time. Times in ET.
+- Default start time is 1 hour ahead of the time of creation.
 - ex. time: `10 PM` or `10:00 PM`.
-- Max length of `bracket_title` is 60 characters.
+- Max length of `title` is 60 characters.
 - `max_entrants` must be between 4 and 24.
 
+#### Join
+`/t join [title: str]`:
+- Adds the user to the specified tournament. 
+- If `title` is not provided, targets the subject tournament in the thread.
+
+#### Leave
+`/t delete [title: str]`:
+- Deletes the specified tournament. 
+- If `title` is not provided, targets the subject tournament in the thread.
+
 #### Delete
-`/bracket delete [bracket_title: str]`:
-- Deletes the specified bracket. 
-- If `bracket_title` is not provided, deletes the most recently created bracket.
+`/t delete [title: str]`:
+- Deletes the specified tournament. 
+- If `title` is not provided, targets the subject tournament in the thread.
 
 #### Update
-`/bracket update <bracket_title: str> [new_bracket_title: str] [time: str] [single_elim: bool] [max_entrants: int]`:
-- Updates the specified bracket using the provided information.
+`/t update <title: str> [new_title: str] [time: str] [single_elim: bool] [max_entrants: int]`:
+- Updates the specified tournament using the provided information. Times in ET.
 - ex. time: `10 PM` or `10:00 PM`.
 - Max length of title is 60 characters.
 - `max_entrants` must be between 4 and 24.
 
 #### Start
-`/bracket start [bracket_title: str]`:
-- Starts the specified bracket if in the registration phase. 
-- If `bracket_title` is not provided, starts the most recently created bracket that has not yet been completed.
-- Only one bracket may be active per server.
+`/t start [title: str]`:
+- Starts the specified tournament if in the registration phase. 
+- If `title` is not provided, targets the subject tournament in the thread.
+- Only one tournament may be active per server.
 
 #### Reset
-`/bracket reset [bracket_title: str]`:
-- Resets a bracket that has been started to the specified bracket to the registration phase. 
-- If `bracket_title` is not provided, resets the current active bracket.
+`/t reset [title: str]`:
+- Resets a tournament that has been started to the specified tournament to the registration phase. 
+- If `title` is not provided, targets the subject tournament in the thread.
 
 #### Finalize
-`/bracket finalize [bracket_title: str]`:
-- Finalizes a bracket that has been started to be completed. 
-- If `bracket_title` is not provided, finalizes the current active bracket.
+`/t finalize [title: str]`:
+- Finalizes a tournament that has been started to be completed. 
+- If `title` is not provided, targets the subject tournament in the thread.
 
 #### Results
-`/bracket results [bracket_title: str]`:
-- Shows the results for the specified bracket if it has been completed. 
-- If `bracket_title` is not provided, shows the results for the most recently completed bracket.
+`/t results [title: str]`:
+- Shows the results for the specified tournament if it has been completed. 
+- If `title` is not provided, targets the subject tournament in the thread.
 
 #### Report
-`/bracket report <match_challonge_id: int> <winner: str>`
+`/t report <match_id: int> <winner: str>`
 - Privileged instruction: Only authorized users can perform it.
 - Manually reports the winner for a match, or overrides the result of a completed match.
 - All matches ahead of the overwritten match are automatically reset.
-- `winner` must be either a player name, '1', '2', '1️⃣', or '2️⃣'
+- `winner` must be either a user mention, '1', '2', '1️⃣', or '2️⃣'
+- Must be sent in a tournament thread.
+
+#### Vote
+`/t vote <match_id: int> <vote: str>`
+- Manually votes for the winner of a match if the user is a participant in that match.
+- `vote` must be either a user mention, '1', '2', '1️⃣', or '2️⃣'
+- Must be sent in a tournament thread.
 
 #### Disqualify
-`/bracket disqualify <entrant_name: str> [bracket_title: str]`:
+`/t disqualify <user_mention: str> [title: str]`:
 - Privileged instruction: Only authorized users can perform it.
-- Disqualifies an entrant from the targeted bracket.
-- If the bracket has not been started, removes the entrant instead.
-- If `bracket_title` is not provided, targets the current active bracket.
+- Disqualifies an entrant from the target tournament.
+- `user_mention` must be a valid Discord user mention.
+- If the tournament has not been started, removes the entrant instead.
+- If `title` is not provided, targets the subject tournament in the thread.
 
-### Challenges
-#### Create
-`/challenge create [best_of: int] [player_mention: str]`:
-- Creates a new challenge. By default, is a best of 3.
-- If `player_mention` is not provided, creates an open challenge. Otherwise, directly challenges the mentioned player.
-- `best_of` must be a positive odd integer.
-- `player_mention` must be a mention of a player. ex. `@WOOPBOT`
+### Channels
+Manage and configure tournament channels and alerts. A tournament channel must be created before tournaments can be created in a server.
+#### Help
+`/t help`
+- Sends a list of channel configuration commands.
 
-#### Cancel
-`/challenge cancel [challenge_id: int]`:
-- Cancels a challenge if it has not been accepted.
-- If `challenge_id` is not provided, targets the user's active challenge if it exists.
-
-#### Delete
-`/challenge delete [challenge_id: int]`:
+#### create
+`/ch create <channel_name: str> <is_forum: bool> [allow_messages: bool] [category_name: str]`:
 - Privileged instruction: Only authorized users can perform it.
-- Cancels a challenge no matter the state.
-- Leaderboard records are updated appropriately.
-- If `challenge_id` is not provided, targets the user's active challenge if it exists.
+- Creates a new tournament channel.
+- If `is_forum` is true, created as a Forum Channel if available in the server, otherwise the channel is created as a Text Channel.
 
-### Challenges Leaderboard
-#### Stats
-`/leaderboard stats [player_mention: str]`:
-- Retreives and displays the leaderboard stats for the targeted player.
-- If `player_mention` is not provided, targets the user who called the command.
-- `player_mention` must be a mention of a player. ex. `@WOOPBOT`
+#### delete
+`/ch delete [channel_mention: str]`:
+- Privileged instruction: Only authorized users can perform it.
+- Deletes the target channel.
+- All incomplete tournaments created in the target channel are also deleted. Tournaments that have been finalized persist in the database.
+- If `channel_mention` is not provided, targets the channel the command was sent in.
+
+#### alert
+`/ch alert <tournament_channel: str> [alert_channel: str]`:
+- Privileged instruction: Only authorized users can perform it.
+- Adds `alert_channel` to receive tournament alerts from `tournament_channel`.
+- `alert_channel` and `tournament_channel` must be valid Discord channel mentions.
+- If `alert_channel` is not provided, targets the channel the command was sent in.
+
+#### remove_alert
+`/ch remove_alert <tournament_channel: str> [alert_channel: str]`:
+- Privileged instruction: Only authorized users can perform it.
+- Removes `alert_channel` from receiving tournament alerts from `tournament_channel`.
+- `alert_channel` and `tournament_channel` must be valid Discord channel mentions.
+- If `alert_channel` is not provided, targets the channel the command was sent in.

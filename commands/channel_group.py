@@ -8,8 +8,8 @@ ChannelGroup = app_commands.Group(name="ch", description="Channel configuration 
 
 @ChannelGroup.command(description="Lists options for tournament channel commands.")
 async def help(interaction: Interaction):
-    help_embed = channel.create_help_embed(interaction)
-    await interaction.response.send_message(embed=help_embed, ephemeral=True)
+    help_embed, help_view = channel.create_help_embed(interaction)
+    await interaction.response.send_message(embed=help_embed, view=help_view, ephemeral=True)
 
 @ChannelGroup.command(description="Creates a tournament channel. Forum Channels are recommended if available.")
 async def create(interaction: Interaction, channel_name: str, is_forum: bool, allow_messages: bool= True, category_name: str = ""):
@@ -20,7 +20,6 @@ async def create(interaction: Interaction, channel_name: str, is_forum: bool, al
 async def delete(interaction: Interaction, channel_mention: str=""):
     await interaction.response.defer(ephemeral=True)
     await channel.delete_tournament_channel(interaction, channel_mention)
-
 
 @ChannelGroup.command(description="Set a channel to recieve tournament alerts.")
 async def alert(interaction: Interaction, tournament_channel: str, alert_channel: str = ""):

@@ -923,6 +923,7 @@ def create_info_embed(db_tournament: dict):
 
 def create_help_embed(interaction: Interaction):
     embed = Embed(title=f'❔ Tournament Help', color=WOOP_PURPLE)
+    embed.description = 'Tournaments must be created in designiated tournament channels. Created tournaments can only be managed by the author or server admins.'
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     # Create
     create_value = """Create a tournament using Discord.
@@ -940,6 +941,21 @@ def create_help_embed(interaction: Interaction):
                     `/t leave`
                     `/t leave title: GENESIS 9`"""
     embed.add_field(name='/t leave', value=leave_value, inline=False)
+    # Seeding
+    seeding_value = """Displays the seeding for a tournament.
+                    `/t seeding`
+                    `/t seeding title: GENESIS 9`"""
+    embed.add_field(name='/t seeding', value=seeding_value, inline=False)
+    # Set Seed
+    set_seed_value = f"""Sets the seed for a participant in a tournament..
+                    `/t seed user_mention: `<@{interaction.client.user.id}> `seed: 1`
+                    `/t seed user_mention: `<@{interaction.client.user.id}> `seed: 1`title: GENESIS 9`"""
+    embed.add_field(name='/t seed', value=set_seed_value, inline=False)
+    # Randomize Seeding
+    randomize_value = """Randomizes the seeding for a tournament.
+                    `/t randomize`
+                    `/t randomize title: GENESIS 9`"""
+    embed.add_field(name='/t randomize', value=randomize_value, inline=False)
     # Delete
     delete_value = """Delete a tournament.
                     `/t delete`
@@ -989,7 +1005,13 @@ def create_help_embed(interaction: Interaction):
                     `/t vote match_id: 1034908912 vote: 1️⃣`
                     `/t vote match_id: 1034908912 vote: 1`"""
     embed.add_field(name='/t disqualify', value=disqualify_value, inline=False)
-    return embed
+    # Footer
+    embed.set_footer(text=f'For more detailed docs, see the README on GitHub.')
+    # GitHub Button
+    view = discord.ui.View(timeout=None)
+    github_button = discord.ui.Button(label='GitHub', url="https://github.com/fborja44/beta-bot", style=discord.ButtonStyle.grey)
+    view.add_item(github_button)
+    return (embed, view)
 
 #######################
 ## TESTING FUNCTIONS ##

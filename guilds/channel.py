@@ -1,4 +1,5 @@
 from discord import Embed, ForumChannel, Guild, Interaction, Message, Member, TextChannel, CategoryChannel, Thread
+import discord
 from utils.color import WOOP_PURPLE
 from utils.common import ICON, TOURNAMENTS
 from utils.logger import printlog, printlog_msg
@@ -283,6 +284,7 @@ async def remove_channel_from_alerts(interaction: Interaction, tournament_channe
 
 def create_help_embed(interaction: Interaction):
     embed = Embed(title=f'❔ Channel Help', color=WOOP_PURPLE)
+    embed.description = 'Channel configuration commands. Only available to server admins.'
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     # Create
     create_value = """Create a tournament channel.
@@ -305,33 +307,13 @@ def create_help_embed(interaction: Interaction):
                     `/ch remove_alert tournament_channel: `<#{interaction.channel_id}>
                     `/ch remove_alert tournament_channel: `<#{interaction.channel_id}> `alert_channel: `<#{interaction.guild.text_channels[0].id}>"""
     embed.add_field(name='/ch delete', value=remove_alert_value, inline=False)
-    # Update
-    update_value = """Updates a tournament according to specified fields.
-                    `/ch update title: GENESIS 9 new_title: GENESIS 10`
-                    `/ch update title: The Big House 10 time: 9:30 PM`
-                    `/ch update title: Low Tier city single_elim: False max_participants: 16`"""
-    embed.add_field(name='/ch update', value=update_value, inline=False)
-    # Start
-    start_value = """Starts a tournament with at least 2 participants.
-                    `/ch start`
-                    `/ch start title: GENESIS 9`"""
-    embed.add_field(name='/ch start', value=start_value, inline=False)
-    # Reset
-    reset_value = """Resets a tournament back to registration phase.
-                    `/ch reset`
-                    `/ch reset title: GENESIS 9`"""
-    embed.add_field(name='/ch reset', value=reset_value, inline=False)
-    # Finalize
-    finalize_value = """Finalizes the results of a tournament if available.
-                    `/ch finalize`
-                    `/ch finalize title: GENESIS 9`"""
-    embed.add_field(name='/ch finalize', value=finalize_value, inline=False)
-    # Results
-    results_value = """Displays the results of a finalized tournament if available.
-                    `/ch results`
-                    `/ch results title: GENESIS 9`"""
-    embed.add_field(name='/ch results', value=results_value, inline=False)
-    return embed
+    # Footer
+    embed.set_footer(text=f'For more detailed docs, see the README on GitHub.')
+    # GitHub Button
+    view = discord.ui.View(timeout=None)
+    github_button = discord.ui.Button(label='GitHub', url="https://github.com/fborja44/beta-bot", style=discord.ButtonStyle.grey)
+    view.add_item(github_button)
+    return (embed, view)
 
 ######################
 ## HELPER FUNCTIONS ##
