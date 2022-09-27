@@ -38,6 +38,11 @@ async def seeding(interaction: Interaction, title: str=""):
     await tournament.send_seeding(interaction, title.strip())
 
 @TournamentGroup.command(description="Randomize the seeding for a tournament bracket.")
+async def seed(interaction: Interaction, user_mention: str, seed: int, title: str=""):
+    await interaction.response.defer(ephemeral=True)
+    await participant.set_seed(interaction, user_mention.strip(), seed, title.strip())
+
+@TournamentGroup.command(description="Randomize the seeding for a tournament bracket.")
 async def randomize(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
     await participant.randomize_seeding(interaction, title.strip())
