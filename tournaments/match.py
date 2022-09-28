@@ -149,8 +149,10 @@ async def vote_match(interaction: Interaction, match_challonge_id: int, vote: st
     channel: TextChannel = interaction.channel
     db_guild = await _guild.find_guild(guild.id)
     vote_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, vote)
+    if not db_tournament:
+        return False
     # Check if in valid channel
-    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+    if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     if not vote_emote:
         return False
@@ -321,7 +323,11 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
     
     # Update tournament embed
     try:
-        tournament_message: Message = await match_message.channel.fetch_message(db_tournament['id'])
+        tournament_channel = await match_message.guild.fetch_channel(db_tournament['channel_id'])
+        if str(tournament_channel.type) == 'forum':
+            tournament_message: Message = await match_message.channel.fetch_message(db_tournament['id'])
+        else:
+            tournament_message: Message = await tournament_channel.fetch_message(db_tournament['id'])
         updated_tournament_embed = _tournament.create_tournament_image(db_tournament, tournament_message.embeds[0])
         await tournament_message.edit(embed=updated_tournament_embed)
     except Exception as e:
@@ -339,8 +345,10 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     winner_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, winner)
+    if not db_tournament:
+        return False
     # Check if in valid channel
-    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+    if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     if not winner_emote:
         return False
@@ -357,9 +365,9 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
             except:
                 print(f"Something went wrong when deleting match ['id'={next_match_id}] while deleting tournament ['name'={db_tournament['title']}].")
     # Report match
-    match_message = await interaction.channel.fetch_message(db_match['id'])
+    match_message = await channel.fetch_message(db_match['id'])
     try:
-        reported_match, winner = await report_match(match_message, db_guild, db_tournament, db_match, winner_emote)
+        _, winner = await report_match(match_message, db_guild, db_tournament, db_match, winner_emote)
     except Exception as e:
         printlog(f"Failed to report match ['id'='{db_match['id']}']", e)
         return False
@@ -428,7 +436,7 @@ async def parse_vote(interaction: Interaction, db_guild: dict, match_challonge_i
         await interaction.followup.send(f"Something went wrong when finding the match.", ephemeral=True)
         return (None, None, None)
     if not db_match:
-        await interaction.followup.send(f"Invalid challonge id.", ephemeral=True)
+        await interaction.followup.send(f"`match_id` is invalid.", ephemeral=True)
         return (None, None, None)
     vote_emote = None
     # Check if provided valid emote

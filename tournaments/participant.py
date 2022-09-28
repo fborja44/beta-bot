@@ -31,7 +31,7 @@ async def join_tournament(interaction: Interaction, tournament_title: str):
     if not db_tournament:
         return False
     # Check if in valid channel
-    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+    if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     await add_participant(interaction, db_tournament)
 
@@ -46,7 +46,7 @@ async def leave_tournament(interaction: Interaction, tournament_title: str):
     if not db_tournament:
         return False
     # Check if in valid channel
-    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+    if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     await remove_participant(interaction, db_tournament)
 
@@ -85,7 +85,6 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
         printlog(f"Failed to add user ['name'='{user.name}'] to challonge tournament. User may already exist.", e)
         if respond: await interaction.followup.send(f"Something went wrong when trying to join '***{tournament_title}***'.", ephemeral=True)
         return False
-    pprint(response)
     # Add user to participants list
     new_participant = {
         'id': user.id, 
@@ -107,9 +106,9 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
         # Update message
         await _tournament.edit_tournament_message(db_tournament, channel)
         # Update thread if applicable
-        if db_tournament['thread_id'] is not None:
-            tournament_thread: Thread = guild.get_thread(db_tournament['thread_id'])
-            await tournament_thread.edit(name=f"🥊 {tournament_title} - {db_tournament['tournament_type'].title()} ({len(db_tournament['participants'])} of {db_tournament['max_participants']})")
+        # if db_tournament['thread_id'] is not None:
+        #     tournament_thread: Thread = guild.get_thread(db_tournament['thread_id'])
+        #     await tournament_thread.edit(name=f"🥊 {tournament_title} - {db_tournament['tournament_type'].title()} ({len(db_tournament['participants'])} of {db_tournament['max_participants']})")
     else:
         print(f"Failed to add participant '{user.name}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
         if respond: await interaction.followup.send(f"Something went wrong when trying to join '***{tournament_title}***'.", ephemeral=True)
@@ -162,9 +161,9 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
         # Update message
         await _tournament.edit_tournament_message(db_tournament, channel)
         # Update thread if applicable
-        if db_tournament['thread_id'] is not None:
-            tournament_thread: Thread = guild.get_thread(db_tournament['thread_id'])
-            await tournament_thread.edit(name=f"🥊 {tournament_title} - {db_tournament['tournament_type'].title()} ({len(db_tournament['participants'])} of {db_tournament['max_participants']})")
+        # if db_tournament['thread_id'] is not None:
+        #     tournament_thread: Thread = guild.get_thread(db_tournament['thread_id'])
+        #     await tournament_thread.edit(name=f"🥊 {tournament_title} - {db_tournament['tournament_type'].title()} ({len(db_tournament['participants'])} of {db_tournament['max_participants']})")
     else:
         print(f"Failed to remove participant ['name'='{db_participant['name']}']from tournament [id='{tournament_id}'].")
         if respond: await interaction.followup.send(f"Something went wrong when trying to leave '***{tournament_title}***'.", ephemeral=True)
@@ -290,7 +289,7 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
     if not db_tournament:
         return False
     # Check if in valid channel
-    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
+    if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     # Only allow author, guild admins, or self to dq a user
     if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator and user.id != participant.id:

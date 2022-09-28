@@ -51,7 +51,6 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
     else:
         target_category: CategoryChannel = interaction.channel.category
     # Create channel
-    command_thread = None
     if is_forum:
         try:
             topic = "Channel for **beta-bot** Tournaments. https://github.com/fborja44/beta-bot"
@@ -76,7 +75,7 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
     # Add channel to guild
     db_guild['config']['tournament_channels'].append({
         'id': new_channel.id,               # Parent channel ID (forum or text)
-        'thread_id': command_thread.id,     # Command channel ID (thread) if it exists
+        'thread_id': command_thread.id if is_forum else None,     # Command channel ID (thread) if it exists
         'alert_channels': [],               # Channels that will receive tournament alerts from this tournament channel
     })
     await _guild.set_guild(guild.id, db_guild)
@@ -205,8 +204,9 @@ async def create_command_thread(forum_channel: ForumChannel):
     content = (
             "**Tournament Discord Bot Instructions**\n"
             "This thread is used to create new tournaments and manage existing tournaments. Existing tournaments can also be managed in their respective threads.\n\n"
-            "To create a new tournament use `/t create`.\n\n"
-            "To view a list of possible tournament commands, use `/t help`.\n\n")
+            "- To create a new tournament use `/t create`.\n\n"
+            "- To view a list of possible tournament commands, use `/t help`.\n\n"
+            "- For detailed documentation and information about commands visit the GitHub page: https://github.com/fborja44/beta-bot.")
     command_thread, command_message = await forum_channel.create_thread(name=name, content=content)
     await command_thread.edit(pinned=True)
     return (command_thread, command_message)
@@ -287,7 +287,7 @@ async def list_tournament_channels(interaction: Interaction):
     """
     guild: Guild = interaction.guild
     db_guild = await _guild.find_add_guild(guild)
-    channel_id_list = [channel['id'] for channel in db_guild['config']['tournament_channels']]
+    channel_id_list = get_tournament_channel_ids(db_guild)
     list_embed = create_channel_list_embed(channel_id_list, f"Tournament Channels for '{guild.name}'")
     await interaction.followup.send(embed=list_embed, ephemeral=True)
     return True
@@ -376,15 +376,21 @@ async def set_tournament_channel(db_guild: dict, db_tournament_channel: dict):
     db_guild['config']['tournament_channels'][channel_index] = db_tournament_channel
     return await _guild.set_guild(db_guild['guild_id'], db_guild)
 
+def get_tournament_channel_ids(db_guild):
+    """
+    Returns a list of tournament channel ids.
+    """
+    return [channel['id'] for channel in db_guild['config']['tournament_channels']]
+
 #######################
 ## MESSAGE FUNCTIONS ##
 #######################
 
-def create_channel_list_embed(channel_id_list: list, list_title: str, description: str=""):
+def create_channel_list_embed(channel_id_list: list, list_title: str):
     """
     Creates a channel list embed.
     """
-    embed = Embed(title=f"💬  {list_title}", description=description, color=WOOP_PURPLE)
+    embed = Embed(title=f"💬  {list_title}", description="", color=WOOP_PURPLE)
     embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     # Create channels list
     if len(channel_id_list) == 0:
