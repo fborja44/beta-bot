@@ -16,6 +16,11 @@ async def create(interaction: Interaction, channel_name: str, is_forum: bool, al
     await interaction.response.defer(ephemeral=True)
     await channel.create_tournament_channel(interaction, channel_name.strip(), category_name.strip(), is_forum, allow_messages)
 
+@ChannelGroup.command(description="Lists all current tournament channels.")
+async def list(interaction: Interaction):
+    await interaction.response.defer(ephemeral=True)
+    await channel.list_tournament_channels(interaction)
+
 @ChannelGroup.command(description="Deletes a tournament channel.")
 async def delete(interaction: Interaction, channel_mention: str=""):
     await interaction.response.defer(ephemeral=True)
@@ -25,6 +30,11 @@ async def delete(interaction: Interaction, channel_mention: str=""):
 async def alert(interaction: Interaction, tournament_channel: str, alert_channel: str = ""):
     await interaction.response.defer()
     await channel.add_channel_to_alerts(interaction, tournament_channel, alert_channel)
+
+@ChannelGroup.command(description="Lists all channels receiving alerts from the target tournament channel.")
+async def list_alerts(interaction: Interaction, tournament_channel: str=""):
+    await interaction.response.defer(ephemeral=True)
+    await channel.list_alert_channels(interaction, tournament_channel)
 
 @ChannelGroup.command(description="Remove a channel from tournament alerts list.")
 async def remove_alert(interaction: Interaction, tournament_channel: str, alert_channel: str = ""):

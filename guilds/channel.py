@@ -253,7 +253,6 @@ async def add_channel_to_alerts(interaction: Interaction, tournament_channel: st
 async def remove_channel_from_alerts(interaction: Interaction, tournament_channel: str, alert_channel: str):
     """
     Adds a channel to channels to receive tournament alerts.
-    TODO: channel mention
     """
     channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
@@ -282,38 +281,37 @@ async def remove_channel_from_alerts(interaction: Interaction, tournament_channe
     await interaction.followup.send(f"<#{channel.id}> will no longer receive tournament alerts.")
     return True
 
-def create_help_embed(interaction: Interaction):
-    embed = Embed(title=f'❔ Channel Help', color=WOOP_PURPLE)
-    embed.description = 'Channel configuration commands. Only available to server admins.'
-    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
-    # Create
-    create_value = """Create a tournament channel.
-                    `/ch create channel_name: ssbm is_forum: True`
-                    `/ch create channel_name: ssbm is_forum: False allow_messages: False`
-                    `/ch create channel_name: ssbm is_forum: False category_name: games`"""
-    embed.add_field(name='/ch create', value=create_value, inline=False)
-    # Join
-    delete_value = f"""Delete a tournament channel.
-                    `/ch delete`
-                    `/ch delete channel_mention: `<#{interaction.channel_id}>"""
-    embed.add_field(name='/ch join', value=delete_value, inline=False)
-    # Add Alert
-    alert_value = f"""Send alerts for a tournament channel to a text channel.
-                    `/ch alert tournament_channel: `<#{interaction.channel_id}>
-                    `/ch alert tournament_channel: `<#{interaction.channel_id}> `alert_channel: `<#{interaction.guild.text_channels[0].id}>"""
-    embed.add_field(name='/ch leave', value=alert_value, inline=False)
-    # Remove Alert
-    remove_alert_value = f"""Removes a text channel from receiving alerts.
-                    `/ch remove_alert tournament_channel: `<#{interaction.channel_id}>
-                    `/ch remove_alert tournament_channel: `<#{interaction.channel_id}> `alert_channel: `<#{interaction.guild.text_channels[0].id}>"""
-    embed.add_field(name='/ch delete', value=remove_alert_value, inline=False)
-    # Footer
-    embed.set_footer(text=f'For more detailed docs, see the README on GitHub.')
-    # GitHub Button
-    view = discord.ui.View(timeout=None)
-    github_button = discord.ui.Button(label='GitHub', url="https://github.com/fborja44/beta-bot", style=discord.ButtonStyle.grey)
-    view.add_item(github_button)
-    return (embed, view)
+async def list_tournament_channels(interaction: Interaction):
+    """
+    Lists all tournament channels in the server.
+    """
+    guild: Guild = interaction.guild
+    db_guild = await _guild.find_add_guild(guild)
+    channel_id_list = [channel['id'] for channel in db_guild['config']['tournament_channels']]
+    list_embed = create_channel_list_embed(channel_id_list, f"Tournament Channels for '{guild.name}'")
+    await interaction.followup.send(embed=list_embed, ephemeral=True)
+    return True
+
+async def list_alert_channels(interaction: Interaction, tournament_channel: str):
+    """
+    Lists all channels receiving alerts from the target tournament channel.
+    """
+    channel: TextChannel = interaction.channel
+    guild: Guild = interaction.guild
+    db_guild = await _guild.find_add_guild(guild)
+    # Check channel mentions
+    t_channel = parse_channel_mention(interaction, tournament_channel)
+    if not t_channel:
+        await interaction.followup.send(f"Invalid channel mention for `tournament_channel`. ex. <#{channel.id}>", ephemeral=True)
+        return False
+    # Check if valid tournament channel
+    db_tournament_channel = find_tournament_channel(db_guild, t_channel.id)
+    if not db_tournament_channel:
+        await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", ephemeral=True) # TODO: list tournament channels
+        return False
+    channel_id_list = db_tournament_channel['alert_channels']
+    list_embed = create_channel_list_embed(channel_id_list, f"Alert Channels for '{t_channel.name}'")
+    await interaction.followup.send(embed=list_embed, ephemeral=True)
 
 ######################
 ## HELPER FUNCTIONS ##
@@ -350,7 +348,10 @@ def parse_channel_mention(interaction: Interaction, channel_mention: str):
         else:
             return None
     else: 
-        return interaction.channel
+        if 'thread' in str(interaction.channel.type):
+            return interaction.channel.parent or interaction.channel
+        else:
+            return interaction.channel
 
 def find_index_in_config(db_guild: dict, target_field: str, target_key: str, target_value):
     """
@@ -374,3 +375,65 @@ async def set_tournament_channel(db_guild: dict, db_tournament_channel: dict):
     channel_index = find_index_in_config(db_guild, 'tournament_channels', 'id', db_tournament_channel['id'])
     db_guild['config']['tournament_channels'][channel_index] = db_tournament_channel
     return await _guild.set_guild(db_guild['guild_id'], db_guild)
+
+#######################
+## MESSAGE FUNCTIONS ##
+#######################
+
+def create_channel_list_embed(channel_id_list: list, list_title: str, description: str=""):
+    """
+    Creates a channel list embed.
+    """
+    embed = Embed(title=f"💬  {list_title}", description=description, color=WOOP_PURPLE)
+    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    # Create channels list
+    if len(channel_id_list) == 0:
+        embed.description = "> `No channels found.`"
+        return embed
+    for i in range(0, len(channel_id_list)):
+        embed.description += f'> **{i+1}.** <#{channel_id_list[i]}>\n'
+    # Footer
+    embed.set_footer(text=f'For a list of channel commands, use `/ch help`.')
+    return embed
+
+def create_help_embed(interaction: Interaction):
+    embed = Embed(title=f'❔ Channel Help', color=WOOP_PURPLE)
+    embed.description = 'Channel configuration commands. Only available to server admins.'
+    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    # Create
+    create_value = """Create a tournament channel.
+                    `/ch create channel_name: ssbm is_forum: True`
+                    `/ch create channel_name: ssbm is_forum: False allow_messages: False`
+                    `/ch create channel_name: ssbm is_forum: False category_name: games`"""
+    embed.add_field(name='/ch create', value=create_value, inline=False)
+    # List
+    list_value = """Lists all current tournament channels.
+                    `/ch list`"""
+    embed.add_field(name='/ch create', value=list_value, inline=False)
+    # Join
+    delete_value = f"""Delete a tournament channel.
+                    `/ch delete`
+                    `/ch delete channel_mention: `<#{interaction.channel_id}>"""
+    embed.add_field(name='/ch join', value=delete_value, inline=False)
+    # Add Alert
+    alert_value = f"""Send alerts for a tournament channel to a text channel.
+                    `/ch alert tournament_channel: `<#{interaction.channel_id}>
+                    `/ch alert tournament_channel: `<#{interaction.channel_id}> `alert_channel: `<#{interaction.guild.text_channels[0].id}>"""
+    embed.add_field(name='/ch leave', value=alert_value, inline=False)
+    # Remove Alert
+    remove_alert_value = f"""Removes a text channel from receiving alerts.
+                    `/ch remove_alert tournament_channel: `<#{interaction.channel_id}>
+                    `/ch remove_alert tournament_channel: `<#{interaction.channel_id}> `alert_channel: `<#{interaction.guild.text_channels[0].id}>"""
+    embed.add_field(name='/ch delete', value=remove_alert_value, inline=False)
+    # List Alerts
+    remove_alert_value = f"""Lists all channels receiving alerts from the target tournament channel.
+                    `/ch list_alerts`
+                    `/ch list_alerts tournament_channel: `<#{interaction.channel_id}>"""
+    embed.add_field(name='/ch delete', value=remove_alert_value, inline=False)
+    # Footer
+    embed.set_footer(text=f'For more detailed docs, see the README on GitHub.')
+    # GitHub Button
+    view = discord.ui.View(timeout=None)
+    github_button = discord.ui.Button(label='GitHub', url="https://github.com/fborja44/beta-bot", style=discord.ButtonStyle.grey)
+    view.add_item(github_button)
+    return (embed, view)

@@ -110,6 +110,10 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
     thread: Thread = interaction.channel if 'thread' in str(interaction.channel.type) else None
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
+    # Check if the server has a tournament channel set
+    if len(db_guild['config']['tournament_channels']) == 0:
+        if respond: await interaction.followup.send('This server does not have a tournament channel set. To create a tournament channel, use `/ch create`.')
+        return False
     # Check if in a valid tournament channel/thread
     tournament_channel = None
     if 'thread' in str(interaction.channel.type):
@@ -123,7 +127,7 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
     bot_user = guild.get_member(interaction.client.user.id)
     bot_permissions = channel.permissions_for(bot_user)
     if not bot_permissions.create_private_threads or not bot_permissions.create_public_threads:
-        if respond: await interaction.followup.send("Bot is missing permissions to post private/public threads.")
+        if respond: await interaction.followup.send("The bot is needs permissions to post private/public threads to create tournaments.")
         return False
     # Parse time; Default is 1 hour from current time
     try:

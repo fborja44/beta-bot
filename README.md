@@ -109,6 +109,10 @@ Manage and configure tournament channels and alerts. A tournament channel must b
 - Creates a new tournament channel.
 - If `is_forum` is true, created as a Forum Channel if available in the server, otherwise the channel is created as a Text Channel.
 
+### list
+`/ch list`:
+- Lists all current tournament channels in the server.
+
 #### delete
 `/ch delete [channel_mention: str]`:
 - Privileged instruction: Only authorized users can perform it.
@@ -129,3 +133,8 @@ Manage and configure tournament channels and alerts. A tournament channel must b
 - Removes `alert_channel` from receiving tournament alerts from `tournament_channel`.
 - `alert_channel` and `tournament_channel` must be valid Discord channel mentions.
 - If `alert_channel` is not provided, targets the channel the command was sent in.
+
+### list_alerts
+`/ch list_alerts [tournament_channel: str]`:
+- Lists all channels that receive alerts from the target tournament channel.
+- If no `tournament_channel` mention is provided, targets the current channel (or its parent if in a forum thread).
