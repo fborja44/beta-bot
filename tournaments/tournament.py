@@ -107,14 +107,14 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
         return False
     # Check if in a valid tournament channel/thread
     db_tournament_channel = None
-    if 'thread' in str(interaction.channel.type):
+    if thread:
         db_tournament_channel = _channel.find_tournament_channel_by_thread_id(db_guild, thread.id)
     else:
         db_tournament_channel = _channel.find_tournament_channel(db_guild, channel.id)
     if not db_tournament_channel:
         channel_id_list = _channel.get_tournament_channel_ids(db_guild)
         channel_embed = _channel.create_channel_list_embed(channel_id_list, f"Tournament Channels for '{guild.name}'")
-        if respond: await interaction.followup.send(f"<#{thread.id or channel.id}> is not a valid tournament channel.", embed=channel_embed) # TODO: List guild's tournament channels.
+        if respond: await interaction.followup.send(f"<#{thread.id or channel.id}> is not a valid tournament channel.", embed=channel_embed)
         return False
     channel = guild.get_channel(db_tournament_channel['id'])
     # Check if bot has thread permissions
@@ -197,12 +197,12 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
             tournament_message = await channel.send(embed=embed)
             tournament_thread = await channel.create_thread(name=thread_title, message=tournament_message)
             await tournament_thread.starter_message.edit(view=registration_buttons_view())
-        # Update tournmanet object
+        # Update tournament object
         new_tournament['id'] = tournament_message.id
         new_tournament['jump_url'] = tournament_message.jump_url
         # Send creation message in alert channels (including forum channel)
         info_embed = create_info_embed(new_tournament)
-        if 'thread' in str(interaction.channel.type):
+        if thread:
             await interaction.channel.send(embed=info_embed)
         for channel_id in db_tournament_channel['alert_channels']:
             alert_channel: TextChannel = guild.get_channel(channel_id)
@@ -257,7 +257,6 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
     """
     Deletes the specified tournament (if it exists).
     """
-    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
@@ -274,9 +273,6 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
     tournament_channel = await valid_tournament_channel(db_tournament, interaction, respond)
     if not tournament_channel:
         return False
-    # Delete every match message and document associated with the tournament
-    # NOT NEEDED ANYMORE BECAUSE MATCHES ARE PART OF THE BRACKET SUBDOCUMENT
-    # await delete_all_matches(channel, db_tournament)
     # Delete tournament document
     try:
         result = await _guild.pull_from_guild(guild, TOURNAMENTS, db_tournament)
@@ -311,7 +307,6 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
     """
     Updates the specified tournament (if it exists).
     """
-    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
@@ -324,7 +319,8 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
         await interaction.followup.send(f"Only the author or server admins can update the tournament.", ephemeral=True)
         return False
     # Check if in valid channel
-    if not await valid_tournament_channel(db_tournament, interaction):
+    tournament_channel = await valid_tournament_channel(db_tournament, interaction)
+    if not tournament_channel:
         return False
     # Only allow updating if the tournament has not been started or completed
     if not db_tournament['open'] or db_tournament['completed']:
@@ -365,7 +361,10 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
     # Update the tournament in database
     await set_tournament(guild.id, tournament_title, db_tournament)
     # Update tournament embed
-    tournament_message: Message = await channel.fetch_message(db_tournament['id'])
+    if _channel.in_forum(interaction):
+        tournament_message: Message = await tournament_thread.fetch_message(db_tournament['id'])
+    else:
+        tournament_message: Message = await tournament_channel.fetch_message(db_tournament['id'])
     author: Member = await guild.fetch_member(db_tournament['author']['id']) or interaction.user
     new_tournament_embed = create_tournament_embed(db_tournament, author)
     await tournament_message.edit(embed=new_tournament_embed)
@@ -378,13 +377,16 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     """
     Starts a tournament created by the user.
     """
-    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
     # Fetch tournament
     db_tournament, tournament_title, tournament_thread = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament: 
+        return False
+    # Fetch tournament channel
+    tournament_channel = await valid_tournament_channel(db_tournament, interaction)
+    if not tournament_channel:
         return False
     # Only allow author or guild admins to start tournament
     if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator:
@@ -428,8 +430,7 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     await set_tournament(guild.id, tournament_title, db_tournament)
     print(f"User ['name'='{user.name}'] started tournament ['title'='{tournament_title}'].")
     # Send start message
-    # tournament_message = await channel.fetch_message(db_tournament['id'])
-    await tournament_thread.send(content=f"'***{tournament_title}***' has now started!") # Reply to original tournament message
+    await tournament_thread.send(content=f"'***{tournament_title}***' has now started!")
     # Get each initial open matches
     matches = list(filter(lambda match: (match['state'] == 'open'), challonge_matches))
     for match in matches:
@@ -438,7 +439,10 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
         except Exception as e:
             printlog(f"Failed to add match ['match_id'='{match['id']}'] to tournament ['title'='{tournament_title}']", e)
     # Update embed message
-    await edit_tournament_message(db_tournament, channel)
+    if _channel.in_forum(interaction):
+        await edit_tournament_message(db_tournament, tournament_thread)
+    else:
+        await edit_tournament_message(db_tournament, tournament_channel)
     await interaction.followup.send(f"Successfully started tournament '***{tournament_title}***'.", ephemeral=True)
     return True
 
@@ -462,6 +466,10 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator:
         await interaction.followup.send(f"Only the author or server admins can reset the tournament.", ephemeral=True)
         return False
+    # Check if it has been started
+    if db_tournament['open']:
+        await interaction.followup.send(f"Cannot reset a tournament during the registration phase.", ephemeral=True)
+        return False
     # Check if already completed
     if db_tournament['completed']: 
         await interaction.followup.send(f"Cannot reset a finalized tournament.", ephemeral=True)
@@ -481,8 +489,8 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     author: Member = await guild.fetch_member(db_tournament['author']['id']) or interaction.user
     new_tournament_embed = create_tournament_embed(db_tournament, author)
     # Check if forum channel before editing content
-    if 'thread' in str(interaction.channel.type) and str(interaction.channel.parent.type) == 'forum':
-        tournament_message = await tournament_channel.fetch_message(db_tournament['id']) # CANNOT FETCH INITIAL MESSAGE IN THREAD
+    if _channel.in_forum(interaction):
+        tournament_message = await tournament_thread.fetch_message(db_tournament['id']) # CANNOT FETCH INITIAL MESSAGE IN THREAD
         await tournament_message.edit(content="Open for Registration 🚨", embed=new_tournament_embed, view=registration_buttons_view())
     else:
         tournament_message = await tournament_channel.fetch_message(db_tournament['id']) # CANNOT FETCH INITIAL MESSAGE IN THREAD
@@ -549,7 +557,10 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
         print(f"Failed to update final tournament ['id'='{db_tournament['id']}'].")
         return False
     # Update embed message
-    await edit_tournament_message(db_tournament, tournament_channel)
+    if _channel.in_forum(interaction):
+        await edit_tournament_message(db_tournament, tournament_thread)
+    else:
+         await edit_tournament_message(db_tournament, tournament_channel)
     print(f"User ['name'='{user.name}'] Finalized tournament '{tournament_title}' ['id'='{db_tournament['id']}'].")
     # Close thread
     try:
@@ -608,6 +619,12 @@ class registration_buttons_view(discord.ui.View):
 ## HELPER FUNCTIONS ##
 ######################
 
+async def validate_arguments_tournament_admin(interaction, tournament_title: str=""):
+    """
+    TODO
+    Validate general arguments passed for tournament admin commands.
+    """
+
 async def valid_tournament_channel(db_tournament: dict, interaction: Interaction, respond: bool=True):
     """
     Checks if performing command in valid channel.
@@ -647,10 +664,10 @@ async def retrieve_valid_tournament(interaction: Interaction, db_guild: dict, to
         if 'thread' in str(interaction.channel.type):
             db_tournament = find_tournament_by_id(db_guild, interaction.channel_id)
             if not db_tournament:
-                await interaction.followup.send(f"This thread is not for a tournament.", ephemeral=True)
+                await interaction.followup.send(f"Not in a tournament thread. Either provide the `title` parameter or use this command in the tournament thread.", ephemeral=True)
                 return (None, None, None)
         else:
-            await interaction.followup.send(f"Provide a tournament title, or use this command in a tournament thread.", ephemeral=True)
+            await interaction.followup.send(f"Not in a tournament thread. Either provide the `title` parameter or use this command in the tournament thread.", ephemeral=True)
             return (None, None, None)
         tournament_title = db_tournament['title']
     # Get tournament thread
@@ -782,6 +799,7 @@ def create_tournament_embed(db_tournament: dict, author: Member):
 async def edit_tournament_message(db_tournament: dict, tournament_channel: TextChannel | Thread):
     """
     Edits tournament embed message in a channel.
+    TODO: Update content if made in forum channel
     """
     tournament_title = db_tournament['title']
     tournament_message: Message = await tournament_channel.fetch_message(db_tournament['id'])
@@ -931,6 +949,7 @@ def create_info_embed(db_tournament: dict):
     embed.add_field(name='Tournament Type', value=db_tournament['tournament_type'].title())
     time_str = time.strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
     embed.add_field(name='Starting At', value=time_str)
+    embed.set_footer(text="Visit the tournament thread to join.")
     return embed
 
 def create_help_embed(interaction: Interaction):

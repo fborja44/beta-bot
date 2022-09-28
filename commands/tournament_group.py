@@ -23,14 +23,14 @@ async def create(interaction: Interaction, title: str, time: str="", single_elim
     await tournament.create_tournament(interaction, title.strip(), time.strip(), single_elim, max_participants)
 
 @TournamentGroup.command(description="Join a tournament bracket.")
-async def join(interaction: Interaction, title: str=""):
+async def join(interaction: Interaction):
     await interaction.response.defer(ephemeral=True)
-    await participant.join_tournament(interaction, title.strip())
+    await participant.join_tournament(interaction)
 
 @TournamentGroup.command(description="Join a tournament bracket.")
-async def leave(interaction: Interaction, title: str=""):
+async def leave(interaction: Interaction):
     await interaction.response.defer(ephemeral=True)
-    await participant.leave_tournament(interaction, title.strip())
+    await participant.leave_tournament(interaction)
 
 @TournamentGroup.command(description="Display the seeding for a tournament bracket.")
 async def seeding(interaction: Interaction, title: str=""):

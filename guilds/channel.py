@@ -382,6 +382,12 @@ def get_tournament_channel_ids(db_guild):
     """
     return [channel['id'] for channel in db_guild['config']['tournament_channels']]
 
+def in_forum(interaction: Interaction):
+    """
+    Returns whether or not an interaction was sent in a thread of a forum channel.
+    """
+    return 'thread' in str(interaction.channel.type) and str(interaction.channel.parent.type) == 'forum'
+
 #######################
 ## MESSAGE FUNCTIONS ##
 #######################
