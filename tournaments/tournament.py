@@ -197,6 +197,9 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
             tournament_message = await channel.send(embed=embed)
             tournament_thread = await channel.create_thread(name=thread_title, message=tournament_message)
             await tournament_thread.starter_message.edit(view=registration_buttons_view())
+        # Update tournmanet object
+        new_tournament['id'] = tournament_message.id
+        new_tournament['jump_url'] = tournament_message.jump_url
         # Send creation message in alert channels (including forum channel)
         info_embed = create_info_embed(new_tournament)
         if 'thread' in str(interaction.channel.type):
@@ -206,8 +209,6 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
             await alert_channel.send(embed=info_embed)
 
         # Add tournament to database
-        new_tournament['id'] = tournament_message.id
-        new_tournament['jump_url'] = tournament_message.jump_url
         result = await _guild.push_to_guild(guild, TOURNAMENTS, new_tournament)
         print(f"User '{user.name}' [id={user.id}] created new tournament '{tournament_title}'.")
 
@@ -495,7 +496,6 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
     """
     Closes a tournament if completed.
     """
-    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
@@ -556,7 +556,7 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
         await tournament_thread.edit(locked=True, pinned=False)
     except:
         print(f"Failed to edit thread for tournament '{tournament_title}' ['id'='{db_tournament['id']}'].")
-    await interaction.followup.send(f"Successfully finalized tournament '***{tournament_title}***'.")
+    await interaction.followup.send(f"Successfully finalized tournament '***{tournament_title}***'.", ephemeral=True)
     return True
 
 async def send_results(interaction: Interaction, tournament_title: str):
@@ -809,7 +809,7 @@ async def edit_tournament_message(db_tournament: dict, tournament_channel: TextC
     if db_tournament['completed']:
         time_str = db_tournament['completed'].strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
         embed.add_field(name=f'Completed At', value=f"{time_str}\nUse `/t results`", inline=False)
-    content = status if 'thread' in str(channel.type) and channel.parent.type == 'forum' else ""
+    content = status if 'thread' in str(tournament_channel.type) and tournament_channel.parent.type == 'forum' else ""
     await tournament_message.edit(content=content, embed=embed)
     return True
 

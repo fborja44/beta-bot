@@ -65,7 +65,7 @@ async def start(interaction: Interaction, title: str=""):
 
 @TournamentGroup.command(description="Resets a tournament bracket.")
 async def reset(interaction: Interaction, title: str=""):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     await tournament.reset_tournament(interaction, title.strip())
 
 @TournamentGroup.command(description="Finalizes a tournament bracket.")

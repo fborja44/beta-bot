@@ -125,7 +125,7 @@ async def pull_from_guild(guild: Guild, target_array: str, document: dict):
     updated_guild = await mdb.update_single_document({'guild_id': guild_id}, {'$pull': {target_array: {'id': document_id}}}, GUILDS)
     if updated_guild:
         print(f"Successfully pulled subdocument ['id'={document_id}] from field '{target_array}' in guild ['name'='{guild.name}'].")
-        return document
+        return updated_guild
     print(f"Failed to pull subdocument ['id'={document_id}] to field '{target_array}' in guild ['name'='{guild.name}'].")
     return None
 

@@ -162,6 +162,7 @@ async def delete_tournament_channel(interaction: Interaction, channel_mention: s
         await interaction.followup.send("Failed to deleted tournament channel; May not exist.")
     if tournament_channel:
         # await interaction.followup.send("Successfully deleted tournament channel.")
+        await interaction.followup.send(f"Succesfully deleted tournament channel '{tournament_channel.name}'.")
         await tournament_channel.delete()
         printlog(f"Deleted tournament channel ['name'='{tournament_channel.name}'] from guild ['name'='{guild.name}']")
     else:
@@ -170,8 +171,8 @@ async def delete_tournament_channel(interaction: Interaction, channel_mention: s
     incomplete_tournaments = _tournament.find_incomplete_tournaments(db_guild)
     for db_tournament in incomplete_tournaments:
         try:
-            await _guild.pull_from_guild(guild, TOURNAMENTS, db_tournament) # TODO: this does not work
-            print("Deleted tournament ['name'={db_tournament['title']}] in database.")
+            db_guild = await _guild.pull_from_guild(guild, TOURNAMENTS, db_tournament) # TODO: this does not work
+            print(f"Deleted tournament ['name'='{db_tournament['title']}'] in database.")
         except:
             print(f"Failed to delete tournament ['name'={db_tournament['title']}].")
         try:
@@ -181,7 +182,6 @@ async def delete_tournament_channel(interaction: Interaction, channel_mention: s
     # Delete from database
     await delete_tournament_channel_db(db_guild, tournament_channel_id)
     print(f"User '{user.name}' [id={user.id}] deleted tournament channel '{channel.name}'.")
-    await interaction.followup.send(f"Succesfully deleted tournament channel '{tournament_channel.name}'.")
     return  True
 
 async def delete_tournament_channel_db(db_guild: dict, tournament_channel_id: int):
@@ -204,8 +204,8 @@ async def create_command_thread(forum_channel: ForumChannel):
     content = (
             "**Tournament Discord Bot Instructions**\n"
             "This thread is used to create new tournaments and manage existing tournaments. Existing tournaments can also be managed in their respective threads.\n\n"
-            "- To create a new tournament use `/t create`.\n\n"
-            "- To view a list of possible tournament commands, use `/t help`.\n\n"
+            "- To create a new tournament use `/t create`.\n"
+            "- To view a list of possible tournament commands, use `/t help`.\n"
             "- For detailed documentation and information about commands visit the GitHub page: https://github.com/fborja44/beta-bot.")
     command_thread, command_message = await forum_channel.create_thread(name=name, content=content)
     await command_thread.edit(pinned=True)
