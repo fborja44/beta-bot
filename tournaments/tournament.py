@@ -166,7 +166,7 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
             'jump_url': None,                                       # Initialized later
             'result_url': None,
             'author': {
-                'username': user.name, 
+                'username': f"{user.name}#{user.discriminator}", 
                 'id': user.id,
                 'avatar_url': user.display_avatar.url
                  },
@@ -209,7 +209,7 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
 
         # Add tournament to database
         result = await _guild.push_to_guild(guild, TOURNAMENTS, new_tournament)
-        print(f"User '{user.name}' [id={user.id}] created new tournament '{tournament_title}'.")
+        print(f"User '{user.name}#{user.discriminator}' [id={user.id}] created new tournament '{tournament_title}'.")
 
         if respond: await interaction.followup.send(f"Successfully created tournament '***{tournament_title}***'.")
         return (new_tournament, tournament_message, tournament_challonge)
@@ -277,7 +277,7 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
         except Exception as e:
             printlog(f"Failed to delete tournament [id='{db_tournament['id']}] from challonge [id='{db_tournament['challonge']['id']}].", e)
             retval = False
-        print(f"User '{user.name}' [id={user.id}] deleted tournament '{tournament_title}'.")
+        print(f"User '{user.name}#{user.discriminator}' [id={user.id}] deleted tournament '{tournament_title}'.")
     else:
         if respond: await interaction.followup.send(f"Failed to delete tournament '***{tournament_title}***'.", ephemeral=True)
         retval = False
@@ -394,7 +394,7 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
         printlog(f"Failed to start tournament ['title'='{tournament_title}'] on challonge.")
         await interaction.followup.send(f"Something went wrong when starting '***{tournament_title}***' on challonge.")
         return False
-    printlog(f"User ['name'='{user.name}'] started tournament '{tournament_title}' [id={db_tournament['id']}].")
+    printlog(f"User ['name'='{user.name}#{user.discriminator}'] started tournament '{tournament_title}' [id={db_tournament['id']}].")
     # Challonge API changed? Retrive matches.
     challonge_matches = challonge.matches.index(db_tournament['challonge']['id'])
     # Get total number of rounds
@@ -406,7 +406,7 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     # Set tournament to closed in database and set total number of rounds
     db_tournament.update({'open': False, 'num_rounds': max_round })
     await set_tournament(guild.id, tournament_title, db_tournament)
-    print(f"User ['name'='{user.name}'] started tournament ['title'='{tournament_title}'].")
+    print(f"User ['name'='{user.name}#{user.discriminator}'] started tournament ['title'='{tournament_title}'].")
     # Send start message
     await tournament_thread.send(content=f"'***{tournament_title}***' has now started!")
     # Get each initial open matches
@@ -448,6 +448,10 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
         return False
     # Delete every match message and document associated with the tournament
     await delete_all_matches(tournament_thread, db_tournament)
+    # Set all participants back to active
+    for i in range(len(db_tournament['participants'])):
+        if not db_tournament['participants'][i]['active']:
+            db_tournament['participants'][i].update({'active': True})
     # Reset tournament on challonge
     try:
         challonge.tournaments.reset(challonge_id)
@@ -456,7 +460,7 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     # Set open to true and reset number of rounds
     db_tournament.update({'open': True, 'num_rounds': None, 'matches': []})
     await set_tournament(guild.id, tournament_title, db_tournament)
-    print(f"User ['name'='{user.name}'] reset tournament ['title'='{tournament_title}'].")
+    print(f"User ['name'='{user.name}#{user.discriminator}'] reset tournament ['title'='{tournament_title}'].")
     # Reset tournament message
     author: Member = await guild.fetch_member(db_tournament['author']['id']) or interaction.user
     new_tournament_embed = create_tournament_embed(db_tournament, author)
@@ -527,7 +531,7 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
         await edit_tournament_message(db_tournament, tournament_thread)
     else:
          await edit_tournament_message(db_tournament, tournament_channel)
-    print(f"User ['name'='{user.name}'] Finalized tournament '{tournament_title}' ['id'='{db_tournament['id']}'].")
+    print(f"User ['name'='{user.name}#{user.discriminator}'] Finalized tournament '{tournament_title}' ['id'='{db_tournament['id']}'].")
     # Close thread
     try:
         await tournament_thread.edit(locked=True, pinned=False)

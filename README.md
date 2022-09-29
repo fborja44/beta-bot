@@ -35,12 +35,12 @@ Tournaments must be created in designiated tournament channels. To see the list 
 #### Join
 `/t join [title: str]`:
 - Adds the user to the specified tournament. 
-- If `title` is not provided, targets the subject tournament in the thread.
+- Must be sent in a tournament thread.
 
 #### Leave
 `/t delete [title: str]`:
 - Deletes the specified tournament. 
-- If `title` is not provided, targets the subject tournament in the thread.
+- Must be sent in a tournament thread.
 
 #### Delete
 `/t delete [title: str]`:
@@ -90,12 +90,12 @@ Tournaments must be created in designiated tournament channels. To see the list 
 - Must be sent in a tournament thread.
 
 #### Disqualify
-`/t disqualify <user_mention: str> [title: str]`:
+`/t disqualify <user_mention: str>`:
 - Privileged instruction: Only authorized users can perform it.
 - Disqualifies an entrant from the target tournament.
 - `user_mention` must be a valid Discord user mention.
 - If the tournament has not been started, removes the entrant instead.
-- If `title` is not provided, targets the subject tournament in the thread.
+- Must be sent in a tournament thread.
 
 ### Channels
 Manage and configure tournament channels and alerts. A tournament channel must be created before tournaments can be created in a server.

@@ -75,7 +75,6 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
     challonge_id = db_tournament['challonge']['id']
     # Check if already in participants list
     if user.id in participant_ids:
-        # printlog(f"User ['name'='{user.name}']' is already registered as an participant in tournament ['title'='{tournament_title}'].")
         if respond: await interaction.followup.send(f"You have already joined '***{tournament_title}***'.", ephemeral=True)
         return False
     # Check if tournament is at capacity
@@ -84,16 +83,16 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
         return False
     # Add user to challonge tournament
     try:
-        response = challonge.participants.create(challonge_id, user.name)
+        response = challonge.participants.create(challonge_id, f'{user.name}#{user.discriminator}')
     except Exception as e:
-        printlog(f"Failed to add user ['name'='{user.name}'] to challonge tournament. User may already exist.", e)
+        printlog(f"Failed to add user ['name'='{user.name}#{user.discriminator}'] to challonge tournament. User may already exist.", e)
         if respond: await interaction.followup.send(f"Something went wrong when trying to join '***{tournament_title}***'.", ephemeral=True)
         return False
-    # Add user to participants list
+    # Add user to participants list in database
     new_participant = {
         'id': user.id, 
         'challonge_id': response['id'],
-        'name': user.name, 
+        'name': f"{user.name}#{user.discriminator}", 
         'seed': response['seed'],
         'placement': None,
         'active': True,
@@ -102,15 +101,15 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
         updated_guild = await _tournament.add_to_tournament(guild.id, tournament_title, 'participants', new_participant)
         db_tournament['participants'].append(new_participant)
     except:
-        print(f"Failed to add user '{user.name}' to tournament ['title'='{tournament_title}'] participants.")
+        print(f"Failed to add user '{new_participant['name']}' to tournament ['title'='{tournament_title}'] participants.")
         if respond: await interaction.followup.send(f"Something went wrong when trying to join '***{tournament_title}***'.", ephemeral=True)
         return False
     if updated_guild:
-        print(f"Added participant '{user.name}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
+        print(f"Added participant '{new_participant['name']}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
         # Update message
         await _tournament.edit_tournament_message(db_tournament, tournament_channel)
     else:
-        print(f"Failed to add participant '{user.name}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
+        print(f"Failed to add participant '{new_participant['name']}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
         if respond: await interaction.followup.send(f"Something went wrong when trying to join '***{tournament_title}***'.", ephemeral=True)
         return False
     await sync_seeding(db_guild, db_tournament)
@@ -252,7 +251,7 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
     db_guild = await _guild.find_add_guild(guild)
     # Validate arguments
     try:
-        db_tournament, tournament_title, _, _ = await _tournament.validate_arguments_tournament_admin(
+        db_tournament, tournament_title, _, tournament_channel = await _tournament.validate_arguments_tournament_admin(
             interaction, db_guild, tournament_title)
     except ValueError:
         return False
@@ -274,12 +273,12 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
         print(f"User ['name'='{user.name}'] manually removed participant.")
         return True
     # Call dq helper function
-    await disqualify_participant(channel, db_guild, db_tournament, db_participant)
+    await disqualify_participant(tournament_channel, db_guild, db_tournament, db_participant)
     await interaction.followup.send(f"'{db_participant['name']}' was disqualified from '***{tournament_title}***'.")
     print(f"User ['name'='{user.name}'] manually disqualified participant.")
     return True
 
-async def disqualify_participant(channel: TextChannel, db_guild: dict, db_tournament: dict, db_participant: dict):
+async def disqualify_participant(tournament_channel: TextChannel | Thread, db_guild: dict, db_tournament: dict, db_participant: dict):
     """
     Function to dq an participant in the database and challonge. Updates messages.
     """
@@ -318,7 +317,7 @@ async def disqualify_participant(channel: TextChannel, db_guild: dict, db_tourna
             break
     if winner_emote:
         # Report match
-        match_message = await channel.fetch_message(db_match['id'])
+        match_message = await tournament_channel.fetch_message(db_match['id'])
         await _match.report_match(match_message, db_guild, db_tournament, db_match, winner_emote, is_dq=True)
     return True
 
@@ -359,7 +358,7 @@ async def validate_participant(interaction, db_tournament: dict, member: Member)
     """
     db_participant = None
     for elem in db_tournament['participants']:
-        if elem['name'].lower() == member.name.lower():
+        if elem['id'] == member.id:
             db_participant = elem
             break
     if not db_participant:

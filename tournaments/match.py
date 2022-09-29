@@ -371,7 +371,7 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     except Exception as e:
         printlog(f"Failed to report match ['id'='{db_match['id']}']", e)
         return False
-    printlog(f"User ['name'='{user.name}'] overwrote result for match ['id'='{db_match['id']}']. Winner: {winner['name']} {winner_emote}.")
+    printlog(f"User ['name'='{user.name}#{user.discriminator}'] overwrote result for match ['id'='{db_match['id']}']. Winner: {winner['name']} {winner_emote}.")
     await interaction.followup.send(content=f"Match report successful. Winner: {winner['name']} {winner_emote}")
     return True
 
