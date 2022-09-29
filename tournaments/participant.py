@@ -179,23 +179,12 @@ async def randomize_seeding(interaction: Interaction, tournament_title: str=""):
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
-    # usage = 'Usage: `$tournament dq <participant name>`. There must be an active tournament, or must be in a reply to a tournament message.'
-    # Retrieve tournament
-    db_tournament, tournament_title, _ = await _tournament.find_valid_tournament(interaction, db_guild, tournament_title)
-    if not db_tournament:
+    try:
+        db_tournament, tournament_title, _, _ = await validate_arguments_seeding(
+            interaction, db_guild, tournament_title)
+    except ValueError:
         return False
     tournament_challonge_id = db_tournament['challonge']['id']
-    # Only allow author or guild admins to update seeding
-    if user != db_tournament['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.followup.send(f"Only the author or server admins can update tournament seeding.", ephemeral=True)
-        return False
-    # Check if in valid channel
-    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
-        return False
-    # Check if tournament has already been started.
-    if not db_tournament['open'] or db_tournament['completed']:
-        await interaction.followup.send(f"Seeding may only be updated during the registration phase.", ephemeral=True)
-        return False
     # Randomize seeding on challonge
     try:
         challonge.participants.randomize(tournament_challonge_id)
@@ -216,31 +205,23 @@ async def set_seed(interaction: Interaction, user_mention: str, seed: int, tourn
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
-    # usage = 'Usage: `$tournament dq <participant name>`. There must be an active tournament, or must be in a reply to a tournament message.'
-    # Retrieve tournament
-    db_tournament, tournament_title = await _tournament.find_valid_tournament(interaction, db_guild, tournament_title)
-    if not db_tournament:
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, _, _ = await validate_arguments_seeding(
+            interaction, db_guild, tournament_title)
+    except ValueError:
         return False
-    challonge_id = db_tournament['challonge']['id']
-    # Check if in valid channel
-    if not await _tournament.valid_tournament_channel(db_tournament, interaction):
-        return False
-    # Only allow author, guild admins
-    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.followup.send(f"Only the author or server admins can update tournament seeding.", ephemeral=True)
-        return False
+    tournament_challonge_id = db_tournament['challonge']['id']
     # Check if valid participant mention
     participant: Member = parse_user_mention(interaction, user_mention)
     if not participant:
         await interaction.followup.send(f"Invalid user mention for `user_mention`. ex. <@{interaction.client.user.id}>", ephemeral=True)
         return False
-    # Check if tournament has already been started.
-    if not db_tournament['open'] or db_tournament['completed']:
-        await interaction.followup.send(f"Seeding may only be updated during the registration phase.", ephemeral=True)
-        return False
     # Check if participant exists
     participant_name = participant.name
     db_participant = await validate_participant(interaction, db_tournament, participant)
+    if not db_participant:
+        return False
     # Check if valid seed
     num_entrants = len(db_tournament['participants'])
     if seed <= 0 or seed > num_entrants:
@@ -248,7 +229,7 @@ async def set_seed(interaction: Interaction, user_mention: str, seed: int, tourn
         return False
     # Update seed on challonge
     try:
-        challonge.participants.update(challonge_id, db_participant['challonge_id'], seed=seed)
+        challonge.participants.update(tournament_challonge_id, db_participant['challonge_id'], seed=seed)
     except:
         printlog(f"Failed to update seed for user ['name'='{participant_name}'] in  tournament ['title'='{tournament_title}'] on challonge.")
         return False
@@ -283,6 +264,8 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
     tournament_title = db_tournament['title']
     # Check if participant exists
     db_participant = await validate_participant(interaction, db_tournament, participant)
+    if not db_participant:
+        return False
     # If tournament is still in registration phase, just remove from tournament
     if db_tournament['open']:
         participant: Member = await interaction.guild.fetch_member(db_participant['id'])
@@ -306,7 +289,6 @@ async def disqualify_participant(channel: TextChannel, db_guild: dict, db_tourna
     db_participant['active'] = False
     participant_index = _tournament.find_index_in_tournament(db_tournament, 'participants', 'id', db_participant['id'])
     db_tournament['participants'][participant_index] = db_participant
-    
     # Update participant in database
     try:
         await _tournament.set_tournament(db_guild['guild_id'], tournament_title, db_tournament)
@@ -319,7 +301,6 @@ async def disqualify_participant(channel: TextChannel, db_guild: dict, db_tourna
     except Exception as e:
         printlog(f"Failed to DQ participant ['name'='{participant_name}'] from tournament ['title'='{tournament_title}']", e)
         return False
-
     # Update all open matches
     winner_emote = None
     for tournament_match in db_tournament['matches']:
@@ -376,20 +357,28 @@ async def validate_participant(interaction, db_tournament: dict, member: Member)
     Returns the database entry of a participant if `member` is a valid participant in the tournament.
     Otherwise, returns 'None'.
     """
+    db_participant = None
     for elem in db_tournament['participants']:
         if elem['name'].lower() == member.name.lower():
             db_participant = elem
             break
     if not db_participant:
-        await interaction.followup.send(f"There is no participant named '{member.name}' in '***{db_tournament['title']}***'.")
+        await interaction.followup.send(f"<@{member.id}> is not a participant in '***{db_tournament['title']}***'.")
         return None
     elif not db_participant['active']:
-        await interaction.followup.send(f"Participant '{member.name}' was previously disqualified from '***{db_tournament['title']}***'.", ephemeral=True)
+        await interaction.followup.send(f"<@{member.id}> was previously disqualified from '***{db_tournament['title']}***'.", ephemeral=True)
         return None
     return db_participant
 
-async def validate_arguments_seeding(interaction, tournament_title: str=""):
+async def validate_arguments_seeding(interaction: Interaction, db_guild: dict, tournament_title: str=""):
     """
-    TODO
     Validate general arguments passed for seeding commands.
     """
+    # Validate arguments
+    db_tournament, tournament_title, tournament_thread, tournament_channel = await _tournament.validate_arguments_tournament_admin(
+        interaction, db_guild, tournament_title)
+    # Check if tournament has already been started.
+    if not db_tournament['open'] or db_tournament['completed']:
+        await interaction.followup.send(f"Seeding may only be updated during the registration phase.", ephemeral=True)
+        raise ValueError("Tournament has already been started.")
+    return db_tournament, tournament_title, tournament_thread, tournament_channel
