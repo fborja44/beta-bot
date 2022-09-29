@@ -281,7 +281,6 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
     else:
         if respond: await interaction.followup.send(f"Failed to delete tournament '***{tournament_title}***'.", ephemeral=True)
         retval = False
-    if respond: await interaction.followup.send(f"Successfully deleted tournament '***{tournament_title}***'.")
     # Delete thread
     try:
         await tournament_thread.delete()
@@ -294,6 +293,7 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
             await tournament_message.delete() # delete message from channel
         except:
             print(f"Failed to delete message for tournament '{tournament_title}' ['id'='{db_tournament['id']}'].")
+    if respond and interaction.channel.id != tournament_thread.id: await interaction.followup.send(f"Successfully deleted tournament '***{tournament_title}***'.")
     return retval
 
 async def update_tournament(interaction: Interaction, tournament_title: str , new_tournament_title: str | None=None, time: str | None=None, single_elim: bool | None=None, max_participants: int | None=None):
@@ -932,7 +932,7 @@ def create_info_embed(db_tournament: dict):
     embed.add_field(name='Tournament Type', value=db_tournament['tournament_type'].title())
     time_str = time.strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
     embed.add_field(name='Starting At', value=time_str)
-    embed.set_footer(text="Visit the tournament thread to join.")
+    embed.set_footer(text="Visit the tournament thread to view more details and join.")
     return embed
 
 def create_help_embed(interaction: Interaction):

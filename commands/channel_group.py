@@ -26,6 +26,11 @@ async def delete(interaction: Interaction, channel_mention: str=""):
     await interaction.response.defer(ephemeral=True)
     await channel.delete_tournament_channel(interaction, channel_mention)
 
+@ChannelGroup.command(description="Recreates the management thread in a tournament forum channel.")
+async def repair(interaction: Interaction, channel_mention: str):
+    await interaction.response.defer(ephemeral=True)
+    await channel.repair_tournament_channel(interaction, channel_mention)
+
 @ChannelGroup.command(description="Set a channel to recieve tournament alerts.")
 async def alert(interaction: Interaction, tournament_channel: str, alert_channel: str = ""):
     await interaction.response.defer()

@@ -18,7 +18,6 @@ channel_match = re.compile(r'^<#[0-9]+>$')
 async def create_tournament_channel(interaction: Interaction, channel_name: str, category_name: str, is_forum: bool, allow_messages: bool):
     """
     Creates a tournament channel.
-    TODO: What happens if the channel is deleted manually and bot is offline
     """
     guild: Guild = interaction.guild
     user: Member = interaction.user
@@ -139,50 +138,36 @@ async def delete_tournament_channel(interaction: Interaction, channel_mention: s
         await interaction.followup.send(f"This server does not have a tournament channel.")
         return False
     # Check for metioned channel
-    channel = parse_channel_mention(interaction, channel_mention)
-    if not channel:
+    tournament_channel = parse_channel_mention(interaction, channel_mention)
+    if not tournament_channel:
         await interaction.followup.send(f"Invalid channel mention. ex. <#{interaction.channel.id}>", ephemeral=True)
         return False
     # Check if valid tournament channel
-    if 'thread' in str(channel.type):
-        if not find_tournament_channel(db_guild, interaction.channel.parent_id):
-            await interaction.followup.send(f"<#{channel.id}> is not a tournament channel.")
-            return False
-        tournament_channel_id = channel.parent_id
-    else:
-        if not find_tournament_channel(db_guild, channel.id):
-            await interaction.followup.send(f"<#{channel.id}> is not a tournament channel.")
-            return False
-        tournament_channel_id = channel.id
+    if not find_tournament_channel(db_guild, tournament_channel.id):
+        await interaction.followup.send(f"<#{tournament_channel.id}> is not a tournament channel.")
+        return False
     # Delete the channel
-    try:
-        tournament_channel = await guild.fetch_channel(tournament_channel_id)
-    except:
-        tournament_channel = None
-        await interaction.followup.send("Failed to deleted tournament channel; May not exist.")
     if tournament_channel:
-        # await interaction.followup.send("Successfully deleted tournament channel.")
         await interaction.followup.send(f"Succesfully deleted tournament channel '{tournament_channel.name}'.")
         await tournament_channel.delete()
         printlog(f"Deleted tournament channel ['name'='{tournament_channel.name}'] from guild ['name'='{guild.name}']")
-    else:
-        await interaction.followup.send(f"Tournament channel not found in guild ['name'='{guild.name}']. Could not delete.")
     # Delete all brackets in channel if they have not been completed
     incomplete_tournaments = _tournament.find_incomplete_tournaments(db_guild)
     for db_tournament in incomplete_tournaments:
-        try:
-            db_guild = await _guild.pull_from_guild(guild, TOURNAMENTS, db_tournament) # TODO: this does not work
-            print(f"Deleted tournament ['name'='{db_tournament['title']}'] in database.")
-        except:
-            print(f"Failed to delete tournament ['name'={db_tournament['title']}].")
-        try:
-            challonge.tournaments.destroy(db_tournament['challonge']['id']) # delete tournament from challonge
-        except Exception as e:
-            printlog(f"Failed to delete tournament [id='{db_tournament['id']}] from challonge [id='{db_tournament['challonge']['id']}].", e)
+        if db_tournament['channel_id'] == tournament_channel.id: # TODO: Test
+            try:
+                db_guild = await _guild.pull_from_guild(guild, TOURNAMENTS, db_tournament)
+                print(f"Deleted tournament ['name'='{db_tournament['title']}'] in database.")
+            except:
+                print(f"Failed to delete tournament ['name'={db_tournament['title']}].")
+            try:
+                challonge.tournaments.destroy(db_tournament['challonge']['id']) # delete tournament from challonge
+            except Exception as e:
+                printlog(f"Failed to delete tournament [id='{db_tournament['id']}] from challonge [id='{db_tournament['challonge']['id']}].", e)
     # Delete from database
-    await delete_tournament_channel_db(db_guild, tournament_channel_id)
-    print(f"User '{user.name}' [id={user.id}] deleted tournament channel '{channel.name}'.")
-    return  True
+    await delete_tournament_channel_db(db_guild, tournament_channel.id)
+    print(f"User '{user.name}' [id={user.id}] deleted tournament channel '{tournament_channel.name}'.")
+    return True
 
 async def delete_tournament_channel_db(db_guild: dict, tournament_channel_id: int):
     db_guild['config']['tournament_channels'] = list(filter(lambda db_channel: db_channel['id'] != tournament_channel_id, db_guild['config']['tournament_channels']))
@@ -190,10 +175,48 @@ async def delete_tournament_channel_db(db_guild: dict, tournament_channel_id: in
     print(f"Removed tournament channel ['id'='{tournament_channel_id}'] from guild ['id'='{db_guild['guild_id']}'] in database.")
     return True
 
+async def repair_tournament_channel(interaction: Interaction, channel_mention: str):
+    """
+    Recreates the management thread in a tournament forum channel.
+    """
+    guild: Guild = interaction.guild
+    user: Member = interaction.user
+    db_guild = await _guild.find_add_guild(guild)
+    # Check if guild has a tournament channel
+    if len(db_guild['config']['tournament_channels']) == 0:
+        await interaction.followup.send(f"This server does not have a tournament channel.")
+        return False
+    # Check for metioned channel
+    tournament_channel = parse_channel_mention(interaction, channel_mention)
+    if not tournament_channel:
+        await interaction.followup.send(f"Invalid channel mention. ex. <#{interaction.channel.id}>", ephemeral=True)
+        return False
+    # Check if valid tournament channel
+    db_tournament_channel = find_tournament_channel(db_guild, tournament_channel.id)
+    if not db_tournament_channel:
+        await interaction.followup.send(f"<#{tournament_channel.id}> is not a tournament channel.")
+        return False
+    if str(tournament_channel.type) != 'forum':
+        await interaction.followup.send("This command is only available for Forum Tournament Channels.", ephemeral=True)
+    # Repair management thread
+    tournament_channel_thread = guild.get_thread(db_tournament_channel['thread_id'])
+    pprint(tournament_channel_thread)
+    if tournament_channel_thread:
+        await tournament_channel_thread.delete()
+    command_thread, _ = await create_command_thread(tournament_channel)
+    # Update guild config
+    index = find_index_in_config(db_guild, 'tournament_channels', 'id', db_tournament_channel['id'])
+    db_guild['config']['tournament_channels'][index].update({'thread_id': command_thread.id})
+    await _guild.set_guild(guild.id, db_guild)
+    printlog(f"User '{user.name}#{user.discriminator}' repaired tournament channel '{tournament_channel.name}' ['id'='{tournament_channel.id}'].")
+    if interaction.channel.id != tournament_channel.id:
+        await interaction.followup.send(f"Succesfully repaired tournament channel <#{tournament_channel.id}>.", ephemeral=True)
+    return True
+
 async def configure_tournament_channel(interaction: Interaction):
     """
     TODO
-    Configures a tournament channel
+    Configures a tournament channel.
     """
 
 async def create_command_thread(forum_channel: ForumChannel):
@@ -204,8 +227,11 @@ async def create_command_thread(forum_channel: ForumChannel):
     content = (
             "**Tournament Discord Bot Instructions**\n"
             "This thread is used to create new tournaments and manage existing tournaments. Existing tournaments can also be managed in their respective threads.\n\n"
+            "Tournaments are configured entirely through Discord, including registration, seeding, bracket type, and capacity. Match reporting and disqualifications are also managed through Discord.\n\n"
+            "**Basic Instructions**\n"
             "- To create a new tournament use `/t create`.\n"
-            "- To view a list of possible tournament commands, use `/t help`.\n"
+            "- To join, leave, or start an existing tournament, use the interactable buttons found under the tournament message.\n"
+            "- To view a list of available tournament commands, use `/t help`.\n"
             "- For detailed documentation and information about commands visit the GitHub page: https://github.com/fborja44/beta-bot.")
     command_thread, command_message = await forum_channel.create_thread(name=name, content=content)
     await command_thread.edit(pinned=True)
