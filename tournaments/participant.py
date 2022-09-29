@@ -20,14 +20,14 @@ def find_participant(db_tournament: dict, participant_id):
         return result[0]
     return None
 
-async def join_tournament(interaction: Interaction, tournament_title: str=""):
+async def join_tournament(interaction: Interaction):
     """
     Join a tournament through command instead of button.
     """
     guild: Guild = interaction.guild
     db_guild = await _guild.find_add_guild(guild)
     # Fetch tournament
-    db_tournament, tournament_title, _ = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)   
+    db_tournament, _, _ = await _tournament.find_valid_tournament(interaction, db_guild)   
     if not db_tournament:
         return False
     # Check if in valid channel
@@ -35,14 +35,14 @@ async def join_tournament(interaction: Interaction, tournament_title: str=""):
         return False
     return await add_participant(interaction, db_tournament)
 
-async def leave_tournament(interaction: Interaction, tournament_title: str=""):
+async def leave_tournament(interaction: Interaction):
     """
     Leave a tournament through command instead of button.
     """
     guild: Guild = interaction.guild
     db_guild = await _guild.find_add_guild(guild)
     # Fetch tournament
-    db_tournament, tournament_title, _ = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)   
+    db_tournament, _, _ = await _tournament.find_valid_tournament(interaction, db_guild)  
     if not db_tournament:
         return False
     # Check if in valid channel
@@ -64,6 +64,10 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
     if not db_tournament or not db_tournament['open']:
         if respond: await interaction.followup.send(f"'***{tournament_title}***' is not open for registration.", ephemeral=True)
         return False 
+    # Fetch tournament channel
+    tournament_channel = await _tournament.valid_tournament_channel(db_tournament, interaction, respond)
+    if not tournament_channel:
+        return False
     tournament_title = db_tournament['title']
     participant_ids = [] # list of participant names
     for participant in db_tournament['participants']:
@@ -104,7 +108,7 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, me
     if updated_guild:
         print(f"Added participant '{user.name}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
         # Update message
-        await _tournament.edit_tournament_message(db_tournament, channel)
+        await _tournament.edit_tournament_message(db_tournament, tournament_channel)
     else:
         print(f"Failed to add participant '{user.name}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
         if respond: await interaction.followup.send(f"Something went wrong when trying to join '***{tournament_title}***'.", ephemeral=True)
@@ -117,7 +121,6 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
     """
     Destroys an participant from a tournament.
     """
-    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     message: Message = interaction.message
     user: Member = member or interaction.user
@@ -126,6 +129,10 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
     db_tournament = db_tournament or _tournament.find_tournament_by_id(db_guild, message.id)
     if not db_tournament or not db_tournament['open']:
         return False 
+    # Fetch tournament channel
+    tournament_channel = await _tournament.valid_tournament_channel(db_tournament, interaction, respond)
+    if not tournament_channel:
+        return False
     # Remove user from challonge tournament
     tournament_title = db_tournament['title']
     participant_names = [] # list of participant names
@@ -147,7 +154,7 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
         return False
     # Remove user from participants list
     try:
-        updated_guild = await _tournament.remove_from_tournament(channel.guild.id, tournament_title, 'participants', db_participant['id'])
+        updated_guild = await _tournament.remove_from_tournament(guild.id, tournament_title, 'participants', db_participant['id'])
         db_tournament['participants'] = list(filter(lambda participant: participant['id'] != user.id, db_tournament['participants']))
     except:
         print(f"Failed to remove user '{db_participant['name']}' from tournament ['title'='{tournament_title}'] participants.")
@@ -156,7 +163,7 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
     if updated_guild:
         print(f"Removed participant ['name'='{db_participant['name']}']from tournament [id='{tournament_id}'].")
         # Update message
-        await _tournament.edit_tournament_message(db_tournament, channel)
+        await _tournament.edit_tournament_message(db_tournament, tournament_channel)
     else:
         print(f"Failed to remove participant ['name'='{db_participant['name']}']from tournament [id='{tournament_id}'].")
         if respond: await interaction.followup.send(f"Something went wrong when trying to leave '***{tournament_title}***'.", ephemeral=True)
@@ -174,7 +181,7 @@ async def randomize_seeding(interaction: Interaction, tournament_title: str=""):
     db_guild = await _guild.find_add_guild(guild)
     # usage = 'Usage: `$tournament dq <participant name>`. There must be an active tournament, or must be in a reply to a tournament message.'
     # Retrieve tournament
-    db_tournament, tournament_title, _ = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)
+    db_tournament, tournament_title, _ = await _tournament.find_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament:
         return False
     tournament_challonge_id = db_tournament['challonge']['id']
@@ -211,7 +218,7 @@ async def set_seed(interaction: Interaction, user_mention: str, seed: int, tourn
     db_guild = await _guild.find_add_guild(guild)
     # usage = 'Usage: `$tournament dq <participant name>`. There must be an active tournament, or must be in a reply to a tournament message.'
     # Retrieve tournament
-    db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)
+    db_tournament, tournament_title = await _tournament.find_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament:
         return False
     challonge_id = db_tournament['challonge']['id']
@@ -262,17 +269,11 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
-    # usage = 'Usage: `$tournament dq <participant name>`. There must be an active tournament, or must be in a reply to a tournament message.'
-    # Retrieve tournament
-    db_tournament, tournament_title = await _tournament.retrieve_valid_tournament(interaction, db_guild, tournament_title)
-    if not db_tournament:
-        return False
-    # Check if in valid channel
-    if not await _tournament.valid_tournament_thread(db_tournament, interaction):
-        return False
-    # Only allow author, guild admins, or self to dq a user
-    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator and user.id != participant.id:
-        await interaction.followup.send(f"Only the author or server admins can disqualify/remove participants from tournaments, or participants must disqualify/remove themselves.", ephemeral=True)
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, _, _ = await _tournament.validate_arguments_tournament_admin(
+            interaction, db_guild, tournament_title)
+    except ValueError:
         return False
     # Check if valid participant mention
     participant: Member = parse_user_mention(interaction, user_mention)
@@ -368,7 +369,7 @@ async def sync_seeding(db_guild: dict, db_tournament: dict):
         p_index = _tournament.find_index_in_tournament(db_tournament, 'participants', 'challonge_id', ch_participant['id'])
         if p_index >= 0:
             db_tournament['participants'][p_index].update({'seed': ch_participant['seed']})
-    return await _tournament.set_tournament(db_guild['id'], db_tournament['title'], db_tournament)
+    return await _tournament.set_tournament(db_guild['guild_id'], db_tournament['title'], db_tournament)
 
 async def validate_participant(interaction, db_tournament: dict, member: Member):
     """

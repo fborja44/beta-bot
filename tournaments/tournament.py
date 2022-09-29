@@ -114,7 +114,7 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
     if not db_tournament_channel:
         channel_id_list = _channel.get_tournament_channel_ids(db_guild)
         channel_embed = _channel.create_channel_list_embed(channel_id_list, f"Tournament Channels for '{guild.name}'")
-        if respond: await interaction.followup.send(f"<#{thread.id or channel.id}> is not a valid tournament channel.", embed=channel_embed)
+        if respond: await interaction.followup.send(f"<#{channel.id if not thread else thread.id}> is not a valid tournament channel.", embed=channel_embed)
         return False
     channel = guild.get_channel(db_tournament_channel['id'])
     # Check if bot has thread permissions
@@ -127,7 +127,6 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
     try:
         parsed_time = parse_time(time)
     except ValueError as e:
-        print(e)
         if respond: await interaction.followup.send("Invalid input for time. ex. `10am` or `10:30pm`")
         return None, None, None
     # Max character length == 60
@@ -245,7 +244,7 @@ async def send_seeding(interaction: Interaction, tournament_title: str):
     guild: Guild = interaction.guild
     db_guild = await _guild.find_guild(guild.id)
     # Fetch tournament
-    db_tournament, tournament_title, _ = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
+    db_tournament, tournament_title, _ = await find_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament:
         return False
     # Create seeding message
@@ -260,18 +259,12 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
-    # Fetch tournament
-    db_tournament, tournament_title, tournament_thread = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
     retval = True
-    if not db_tournament:
-        return False
-    # Only allow author or guild admins to delete tournament
-    if user != db_tournament['author']['id'] and not user.guild_permissions.administrator:
-        if respond: await interaction.followup.send(f"Only the author or server admins can delete tournaments.", ephemeral=True)
-        return False
-    # Check if in valid channel
-    tournament_channel = await valid_tournament_channel(db_tournament, interaction, respond)
-    if not tournament_channel:
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await validate_arguments_tournament_admin(
+        interaction, db_guild, tournament_title, respond=respond)
+    except:
         return False
     # Delete tournament document
     try:
@@ -310,17 +303,11 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
-    # Fetch tournament
-    db_tournament, tournament_title, tournament_thread = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
-    if not db_tournament: 
-        return False
-    # Only allow author or guild admins to update tournament
-    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.followup.send(f"Only the author or server admins can update the tournament.", ephemeral=True)
-        return False
-    # Check if in valid channel
-    tournament_channel = await valid_tournament_channel(db_tournament, interaction)
-    if not tournament_channel:
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await validate_arguments_tournament_admin(
+            interaction, db_guild, tournament_title)
+    except ValueError:
         return False
     # Only allow updating if the tournament has not been started or completed
     if not db_tournament['open'] or db_tournament['completed']:
@@ -334,10 +321,10 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
     if new_tournament_title is not None:
         if len(new_tournament_title.strip()) == 0:
             await interaction.followup.send(f"Tournament title cannot be empty.")
-            return None, None, None
+            return False
         if len(new_tournament_title.strip()) > 60:
             await interaction.followup.send(f"Tournament title can be no longer than 60 characters.")
-            return None, None, None
+            return False
         db_tournament['title'] = new_tournament_title
     # Updating time
     if time is not None:
@@ -380,20 +367,11 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
-    # Fetch tournament
-    db_tournament, tournament_title, tournament_thread = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
-    if not db_tournament: 
-        return False
-    # Fetch tournament channel
-    tournament_channel = await valid_tournament_channel(db_tournament, interaction)
-    if not tournament_channel:
-        return False
-    # Only allow author or guild admins to start tournament
-    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.followup.send(f"Only the author or server admins can start the tournament.", ephemeral=True)
-        return False
-    # Check if in valid channel
-    if not await valid_tournament_channel(db_tournament, interaction):
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await validate_arguments_tournament_admin(
+            interaction, db_guild, tournament_title)
+    except ValueError:
         return False
     # Check if already started
     if not db_tournament['open']:
@@ -453,19 +431,13 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
-    # Fetch tournament
-    db_tournament, tournament_title, tournament_thread = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
-    if not db_tournament:
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await validate_arguments_tournament_admin(
+            interaction, db_guild, tournament_title)
+    except ValueError:
         return False
     challonge_id = db_tournament['challonge']['id']
-    # Check if in valid channel
-    tournament_channel =  await valid_tournament_channel(db_tournament, interaction)
-    if not tournament_channel:
-        return False
-    # Only allow author or guild admins to reset tournament
-    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.followup.send(f"Only the author or server admins can reset the tournament.", ephemeral=True)
-        return False
     # Check if it has been started
     if db_tournament['open']:
         await interaction.followup.send(f"Cannot reset a tournament during the registration phase.", ephemeral=True)
@@ -507,18 +479,12 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
-    # Fetch tournament
     completed_time = datetime.now(tz=EASTERN_ZONE)
-    db_tournament, tournament_title, tournament_thread = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
-    if not db_tournament:
-        return False
-    # Only allow author or guild admins to finalize tournament
-    if user.id != db_tournament['author']['id'] and not user.guild_permissions.administrator:
-        await interaction.followup.send(f"Only the author or server admins can finalize the tournament.", ephemeral=True)
-        return False
-    # Check if in valid channel
-    tournament_channel = await valid_tournament_channel(db_tournament, interaction)
-    if not tournament_channel:
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await validate_arguments_tournament_admin(
+            interaction, db_guild, tournament_title)
+    except ValueError:
         return False
     # Check if already finalized
     if db_tournament['completed']:
@@ -577,7 +543,7 @@ async def send_results(interaction: Interaction, tournament_title: str):
     guild: Guild = interaction.guild
     db_guild = await _guild.find_guild(guild.id)
     # Fetch tournament
-    db_tournament, tournament_title, _ = await retrieve_valid_tournament(interaction, db_guild, tournament_title)
+    db_tournament, tournament_title, _ = await find_valid_tournament(interaction, db_guild, tournament_title)
     if not db_tournament:
         return False
     # Check if tournament is completed
@@ -619,11 +585,25 @@ class registration_buttons_view(discord.ui.View):
 ## HELPER FUNCTIONS ##
 ######################
 
-async def validate_arguments_tournament_admin(interaction, tournament_title: str=""):
+async def validate_arguments_tournament_admin(interaction: Interaction, db_guild: dict, tournament_title: str="", respond=True):
     """
-    TODO
+    
     Validate general arguments passed for tournament admin commands.
     """
+    user: Member = interaction.user
+    # Fetch tournament
+    db_tournament, tournament_title, tournament_thread = await find_valid_tournament(interaction, db_guild, tournament_title)
+    if not db_tournament:
+        raise ValueError(f"Invalid tournament title. title='{tournament_title}'")
+    # Check if in valid channel
+    tournament_channel = await valid_tournament_channel(db_tournament, interaction, respond)
+    if not tournament_channel:
+        raise ValueError(f"Invalid tournament channel.")
+    # Only allow author or guild admins to delete tournament
+    if user != db_tournament['author']['id'] and not user.guild_permissions.administrator:
+        if respond: await interaction.followup.send(f"Only available to server admins or the tournament author.", ephemeral=True)
+        raise ValueError(f"User does not have tournament admin permissions.")
+    return (db_tournament, tournament_title, tournament_thread, tournament_channel)
 
 async def valid_tournament_channel(db_tournament: dict, interaction: Interaction, respond: bool=True):
     """
@@ -646,7 +626,7 @@ async def valid_tournament_thread(db_tournament: dict, interaction: Interaction,
         return None
     return interaction.guild.get_channel_or_thread(db_tournament['channel_id'])
 
-async def retrieve_valid_tournament(interaction: Interaction, db_guild: dict, tournament_title: str):
+async def find_valid_tournament(interaction: Interaction, db_guild: dict, tournament_title: str=""):
     """"
     Checks if there is a valid tournament.
     By default, finds tournament by tournament title.
@@ -657,22 +637,21 @@ async def retrieve_valid_tournament(interaction: Interaction, db_guild: dict, to
         # Check if tournament exists
         db_tournament = find_tournament(db_guild, tournament_title)
         if not db_tournament:
-            await interaction.followup.send(f"Tournament with name '{tournament_title}' does not exist.", ephemeral=True)
+            await interaction.followup.send(f"Tournament with `title` '***{tournament_title}***' does not exist.", ephemeral=True)
             return (None, None, None)
     else:
         # Check if in thread
         if 'thread' in str(interaction.channel.type):
             db_tournament = find_tournament_by_id(db_guild, interaction.channel_id)
             if not db_tournament:
-                await interaction.followup.send(f"Not in a tournament thread. Either provide the `title` parameter or use this command in the tournament thread.", ephemeral=True)
+                await interaction.followup.send(f"Invalid channel. Either provide the `title` parameter if available or use this command in the tournament thread.", ephemeral=True)
                 return (None, None, None)
         else:
-            await interaction.followup.send(f"Not in a tournament thread. Either provide the `title` parameter or use this command in the tournament thread.", ephemeral=True)
+            await interaction.followup.send(f"Invalid channel. Either provide the `title` parameter if available or use this command in the tournament thread.", ephemeral=True)
             return (None, None, None)
-        tournament_title = db_tournament['title']
     # Get tournament thread
     tournament_thread = interaction.guild.get_thread(db_tournament['id'])
-    return (db_tournament, tournament_title, tournament_thread)
+    return (db_tournament, db_tournament['title'], tournament_thread)
 
 def find_index_in_tournament(db_tournament: dict, target_field: str, target_key: str, target_value):
     """

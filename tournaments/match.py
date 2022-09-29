@@ -299,7 +299,7 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
         return None, None
     # Check if last match
     if len(challonge_matches) == 0 and db_match['round'] == db_tournament['num_rounds']:
-        await match_message.channel.send(f"***{tournament_name}*** has been completed! Use `/t finalize {tournament_name}` to finalize the results!")
+        await match_message.channel.send(f"'***{tournament_name}***' has been completed! Use `/t finalize {tournament_name}` to finalize the results!")
         return db_match, winner
     for challonge_match in challonge_matches:
         # Check if match has already been called (in database)
@@ -559,7 +559,6 @@ def get_round_name(db_tournament: dict, match_id: int, round: int):
                     try:
                         matches = challonge.matches.index(db_tournament['challonge']['id'])
                         matches.sort(reverse=True, key=(lambda match: match['id']))
-                        print(matches[0]['id'])
                         if match_id != matches[0]['id']:
                             return "Grand Finals Set 1"
                         else:
