@@ -1,4 +1,3 @@
-from typing import Optional, Union
 from discord import app_commands, Interaction
 from utils.common import MAX_ENTRANTS
 from tournaments import match, participant, tournament
@@ -87,6 +86,11 @@ async def report(interaction: Interaction, match_id: int, winner: str):
 async def vote(interaction: Interaction, match_id: int, vote: str):
     await interaction.response.defer(ephemeral=True)
     await match.vote_match(interaction, match_id, vote.strip())
+
+@TournamentGroup.command(description="Recalls a match if it is missing.")
+async def medic(interaction: Interaction, match_id: int):
+    await interaction.response.defer(ephemeral=True)
+    await match.repair_match(interaction, match_id)
 
 @TournamentGroup.command(description="Disqualifies or removes an participant from a tournament bracket.")
 async def disqualify(interaction: Interaction, user_mention: str):

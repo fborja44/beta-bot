@@ -36,7 +36,7 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
         return False
     # If set to forum, check if server has community features
     if is_forum and 'COMMUNITY' not in guild.features:
-        await interaction.followup.send("This server cannot create forum channels. Must be a community server.")
+        await interaction.followup.send("Unable to create forum channel. This server is not a community server. Go to `Server Settings` and select `Enable Community` to learn more.")
         return False
     # Check if category is included
     if len(category_name) > 0:
