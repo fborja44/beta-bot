@@ -325,10 +325,10 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
         if len(new_tournament_title.strip()) > 60:
             await interaction.followup.send(f"Tournament title can be no longer than 60 characters.")
             return False
-        db_tournament['title'] = new_tournament_title
+        db_tournament['title'] = new_tournament_title.strip()
     # Updating time
     if time is not None:
-        db_tournament['start_time'] = parse_time(time)
+        db_tournament['start_time'] = parse_time(time.strip())
     # Updating type
     if single_elim is not None:
         db_tournament['tournament_type'] = "single elimination" if single_elim else "double elimination"

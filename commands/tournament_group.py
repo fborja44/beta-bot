@@ -55,7 +55,7 @@ async def delete(interaction: Interaction, title: str=""):
 async def update(interaction: Interaction, title: str, new_title: str | None = None, time: str | None = None, 
                     single_elim: bool | None = None, max_participants: int | None = None):
     await interaction.response.defer(ephemeral=True)
-    await tournament.update_tournament(interaction, title.strip(), new_title.strip(), time.strip(), single_elim, max_participants)
+    await tournament.update_tournament(interaction, title, new_title, time, single_elim, max_participants)
 
 @TournamentGroup.command(description="Starts a tournament bracket.")
 async def start(interaction: Interaction, title: str=""):
