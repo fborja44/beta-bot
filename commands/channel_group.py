@@ -12,9 +12,19 @@ async def help(interaction: Interaction):
     await interaction.response.send_message(embed=help_embed, view=help_view, ephemeral=True)
 
 @ChannelGroup.command(description="Creates a tournament channel. Forum Channels are recommended if available.")
-async def create(interaction: Interaction, channel_name: str, is_forum: bool, allow_messages: bool= True, category_name: str = ""):
+async def create(interaction: Interaction, channel_name: str, is_forum: bool, target_category: str = ""):
     await interaction.response.defer(ephemeral=True)
-    await channel.create_tournament_channel(interaction, channel_name.strip(), category_name.strip(), is_forum, allow_messages)
+    await channel.create_tournament_channel(interaction, channel_name.strip(), target_category.strip(), is_forum)
+
+@ChannelGroup.command(description="Sets a channel to be a tournament channel. Forum Channels are recommended if available.")
+async def set(interaction: Interaction, channel_mention: str=""):
+    await interaction.response.defer(ephemeral=True)
+    await channel.set_as_tournament_channel(interaction, channel_mention.strip())
+
+@ChannelGroup.command(description="Removes a channel as tournament channel without deleting it.")
+async def remove(interaction: Interaction, channel_mention: str=""):
+    await interaction.response.defer(ephemeral=True)
+    await channel.remove_as_tournament_channel(interaction, channel_mention.strip())
 
 @ChannelGroup.command(description="Lists all current tournament channels.")
 async def list(interaction: Interaction):

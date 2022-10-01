@@ -15,7 +15,7 @@ import utils.mdb as mdb
 
 channel_match = re.compile(r'^<#[0-9]+>$')
 
-async def create_tournament_channel(interaction: Interaction, channel_name: str, category_name: str, is_forum: bool, allow_messages: bool):
+async def create_tournament_channel(interaction: Interaction, channel_name: str, target_category: str, is_forum: bool):
     """
     Creates a tournament channel.
     """
@@ -39,14 +39,14 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
         await interaction.followup.send("Unable to create forum channel. This server is not a community server. Go to `Server Settings` and select `Enable Community` to learn more.")
         return False
     # Check if category is included
-    if len(category_name) > 0:
+    if len(target_category) > 0:
         # Check if category name exists on server
         category_names = []
         map(lambda category: category_names.append(category.name), guild.categories)
-        if category_name not in category_names:
-            await interaction.followup.send(f"Category with name '{category_name}' does not exist in this server.")
+        if target_category not in category_names:
+            await interaction.followup.send(f"Category with name '{target_category}' does not exist in this server.")
             return False
-        target_category = list(filter(lambda category: category.name == category_name, guild.categories))[0]
+        target_category = list(filter(lambda category: category.name == target_category, guild.categories))[0]
     else:
         target_category: CategoryChannel = interaction.channel.category
     # Create channel
@@ -68,7 +68,6 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
             await interaction.followup.send(f"Failed to create tournament text channel.")
             return False
     # Set message permissions
-    await new_channel.set_permissions(guild.default_role, send_messages=allow_messages) # TODO: Check if this gets overwritten
     await new_channel.edit(sync_permissions=True)
 
     # Add channel to guild
@@ -79,19 +78,17 @@ async def create_tournament_channel(interaction: Interaction, channel_name: str,
     })
     await _guild.set_guild(guild.id, db_guild)
     print(f"User '{user.name}' added tournament channel to guild.")
-    await interaction.followup.send(f"Succesfully created new tournament channel <#{new_channel.id}>.")
+    await interaction.followup.send(f"Succesfully created new tournament channel: <#{new_channel.id}>.")
     return True
 
-async def set_tournament_channel(interaction: Interaction, channel_mention: str, allow_messages: bool):
+async def set_as_tournament_channel(interaction: Interaction, channel_mention: str):
     """
-    TODO
     Sets an existing channel to a tournament channel.
     If channel_mention is empty, targets the current channel.
     """
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
-
     # Only allow author or guild admins to set a tournament channel
     if not user.guild_permissions.administrator:
         await interaction.followup.send(f"Only server admins can set tournamnet channels.", ephemeral=True)
@@ -101,8 +98,9 @@ async def set_tournament_channel(interaction: Interaction, channel_mention: str,
     if not channel:
         await interaction.followup.send(f"Invalid channel mention. ex. <#{interaction.channel.id}>", ephemeral=True)
         return False
+    tournament_channel_ids = get_tournament_channel_ids(db_guild)
     # Check if channel is already a tournament channel
-    if channel.id in db_guild['config']['tournament_channels']:
+    if channel.id in tournament_channel_ids:
         await interaction.followup.send(f"<#{channel.id}> is already set as a tournament channel .", ephemeral=True)
         return False
     # Check if channel is Forum or Text
@@ -121,8 +119,8 @@ async def set_tournament_channel(interaction: Interaction, channel_mention: str,
         'alert_channels': [],
     })
     await _guild.set_guild(guild.id, db_guild)
-    print(f"User '{user.name}' set new tournament channel in guild.")
-    await interaction.followup.send(f"Succesfully set new tournament channel <#{channel.id}>.")
+    print(f"User '{user.name}' set new tournament channel '{channel.name}'.")
+    await interaction.followup.send(f"Succesfully set <#{channel.id}> as a tournament channel.")
     return True
 
 async def delete_tournament_channel(interaction: Interaction, channel_mention: str):
@@ -173,6 +171,44 @@ async def delete_tournament_channel_db(db_guild: dict, tournament_channel_id: in
     db_guild['config']['tournament_channels'] = list(filter(lambda db_channel: db_channel['id'] != tournament_channel_id, db_guild['config']['tournament_channels']))
     await _guild.set_guild(db_guild['guild_id'], db_guild)
     print(f"Removed tournament channel ['id'='{tournament_channel_id}'] from guild ['id'='{db_guild['guild_id']}'] in database.")
+    return True
+
+async def remove_as_tournament_channel(interaction: Interaction, channel_mention: str):
+    """
+    Removes a channel from being a tournament channel without deleting it from discord.
+    If channel_mention is empty, targets the current channel.
+    """
+    guild: Guild = interaction.guild
+    user: Member = interaction.user
+    db_guild = await _guild.find_add_guild(guild)
+    # Only allow author or guild admins to set a tournament channel
+    if not user.guild_permissions.administrator:
+        await interaction.followup.send(f"Only server admins can set tournamnet channels.", ephemeral=True)
+        return False
+    # Check for metioned channel
+    channel = parse_channel_mention(interaction, channel_mention)
+    if not channel:
+        await interaction.followup.send(f"Invalid channel mention. ex. <#{interaction.channel.id}>", ephemeral=True)
+        return False
+    tournament_channel_ids = get_tournament_channel_ids(db_guild)
+    # Check if channel is already a tournament channel
+    if channel.id not in tournament_channel_ids:
+        await interaction.followup.send(f"<#{channel.id}> is not set as tournament channel .", ephemeral=True)
+        return False
+    # Check if the channel has an active tournament
+    active_tournament = _tournament.find_active_tournament(db_guild)
+    if active_tournament['channel_id'] == channel.id:
+        await interaction.follow.send(f"Unable to remove tournament channel. This channel has an active tournament '***{active_tournament['title']}***'.")
+        return False
+    # Delete incomplete tournaments
+    incomplete_tournaments = _tournament.find_incomplete_tournaments(db_guild)
+    for db_tournament in incomplete_tournaments:
+        if db_tournament['channel_id'] == channel.id:
+            await _tournament.delete_tournament(interaction, db_tournament['title'], respond=False)
+    printlog(f"User '{user.name}#{user.discriminator}' removed tournament channel '{channel.name}'.")
+    # Delete from database
+    await delete_tournament_channel_db(db_guild, channel.id)
+    await interaction.followup.send(f"Succesfully removed <#{channel.id}> as a tournament channel.")
     return True
 
 async def repair_tournament_channel(interaction: Interaction, channel_mention: str):
@@ -252,7 +288,7 @@ async def add_channel_to_alerts(interaction: Interaction, tournament_channel: st
         await interaction.followup.send(f"Only server admins can update tournament alerts.", ephemeral=True)
         return False
     # Check channel mentions
-    t_channel = parse_channel_mention(interaction, tournament_channel)
+    t_channel: ForumChannel | TextChannel = parse_channel_mention(interaction, tournament_channel)
     if not t_channel:
         await interaction.followup.send(f"Invalid channel mention for `tournament_channel`. ex. <#{channel.id}>", ephemeral=True)
         return False
@@ -261,13 +297,17 @@ async def add_channel_to_alerts(interaction: Interaction, tournament_channel: st
     if not db_tournament_channel:
         await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", ephemeral=True) # TODO: list tournament channels
         return False
-    a_channel = parse_channel_mention(interaction, alert_channel)
+    a_channel: TextChannel = parse_channel_mention(interaction, alert_channel)
     if not a_channel:
         await interaction.followup.send(f"Invalid channel mention for `alert_channel`. ex. <#{channel.id}>", ephemeral=True)
         return False
     # Check if a valid text channel
     if str(a_channel.type) != 'text':
         await interaction.followup.send(f"`alert_channel` must be a valid text channel to receive alerts.", ephemeral=True)
+        return False
+    # Check if a_channel is a tournament channel; if it is, invalid
+    if find_tournament_channel(db_guild, a_channel.id):
+        await interaction.followup.send(f"<#{a_channel.id}> is a tournament channel and cannot be set to receive alerts.", ephemeral=True)
         return False
     # Add channel to guild
     db_tournament_channel['alert_channels'].append(a_channel.id)

@@ -51,7 +51,7 @@ async def delete(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
     await tournament.delete_tournament(interaction, title.strip())
 
-@TournamentGroup.command(description="Updates a tournament bracket. Times in ET.") # TODO: fix
+@TournamentGroup.command(description="Updates a tournament bracket. Times in ET.")
 async def update(interaction: Interaction, title: str, new_title: str | None = None, time: str | None = None, 
                     single_elim: bool | None = None, max_participants: int | None = None):
     await interaction.response.defer(ephemeral=True)

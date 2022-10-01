@@ -86,7 +86,6 @@ def find_incomplete_tournaments(db_guild: dict):
     guild_tournaments = db_guild['tournaments']
     try:
         guild_tournaments = list(filter(lambda tournament: not tournament['completed'], guild_tournaments))
-        guild_tournaments.sort(key=lambda tournament: tournament['completed'], reverse=True)
         return guild_tournaments
     except Exception as e:
         print(e)

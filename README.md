@@ -104,7 +104,7 @@ Manage and configure tournament channels and alerts. A tournament channel must b
 - Sends a list of channel configuration commands.
 
 #### create
-`/ch create <channel_name: str> <is_forum: bool> [allow_messages: bool] [category_name: str]`:
+`/ch create <channel_name: str> <is_forum: bool> [allow_messages: bool] [target_category: str]`:
 - Privileged instruction: Only authorized users can perform it.
 - Creates a new tournament channel.
 - If `is_forum` is true, created as a Forum Channel if available in the server, otherwise the channel is created as a Text Channel.
