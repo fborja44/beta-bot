@@ -33,7 +33,7 @@ def find_match_by_challonge_id(db_tournament: dict, challonge_id: int):
         return result[0]
     return None
 
-async def create_match(tournament_thread: Thread, guild: Guild, db_tournament: dict, challonge_match):
+async def create_match(tournament_thread: Thread, guild: Guild, db_tournament: dict, challonge_match, db: bool=True):
     """
     Creates a new match in a tournament.
     """
@@ -77,12 +77,13 @@ async def create_match(tournament_thread: Thread, guild: Guild, db_tournament: d
 
     # Add match document to database
     new_match['id'] = match_message.id
-    try:
-        await _tournament.add_to_tournament(guild_id, tournament_name, MATCHES, new_match)
-        print(f"Added new match ['id'='{match_message.id}'] to tournament ['name'='{tournament_name}'].")
-    except Exception as e:
-        printlog(f"Failed to add match ['id'={new_match['id']}] to tournament ['name'='{tournament_name}'].", e)
-        return None
+    if db:
+        try:
+            await _tournament.add_to_tournament(guild_id, tournament_name, MATCHES, new_match)
+            print(f"Added new match ['id'='{match_message.id}'] to tournament ['name'='{tournament_name}'].")
+        except Exception as e:
+            printlog(f"Failed to add match ['id'={new_match['id']}] to tournament ['name'='{tournament_name}'].", e)
+            return None
     return new_match
 
 async def delete_match(channel: TextChannel, db_tournament: dict, match_id: int):
@@ -375,37 +376,44 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     await interaction.followup.send(content=f"Match report successful. Winner: {winner['name']} {winner_emote}")
     return True
 
-async def repair_match(interaction: Interaction, match_id):
+async def repair_match(interaction: Interaction, tournament_title: str=""):
     """
-    Recalls a match if it is missing or was deleted in the tournament channel.
+    Recalls all incomplete matches whose messages are missing (i.e. have been deleted).
     Only works if the match exists in the database (i.e. has been called previously).
     """
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
-    # Fetch active tournament and targeted match from db
-    db_tournament, db_match = fetch_tournament_and_match(interaction, db_guild, match_id)
-    if not db_tournament or not db_match:
-        return False
-    # Check if in valid thread
-    tournament_thread = await _tournament.valid_tournament_thread(db_tournament, interaction)
-    if not tournament_thread:
-        return False
-    # Check if match has already been completed
-    if db_match['completed']:
-        await interaction.followup.send("This match has already been completed.")
-        return False
-    # Check if match message exists
+    # Validate arguments
     try:
-        match_message = await tournament_thread.fetch_message(db_match['id'])
-    except NotFound:
-        challonge.matches.show(db_tournament['challonge']['id'], db_match['challonge_id'])
-        # Re-call the match in discord
-        await create_match(tournament_thread, guild, db_tournament, db=False)
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await _tournament.validate_arguments_tournament(
+            interaction, db_guild, tournament_title)
+    except ValueError:
+        return False
+    # Go through all matches and check if they need to be recalled
+    printlog(f"User '{user.name}#{user.discriminator}' called match medic for tournament '{db_tournament['title']}'")
+    count = 0
+    for db_match in db_tournament['matches']:
+        # Check if match has already been completed
+        if db_match['completed']:
+            continue
+        # Check if match message exists
+        try:
+            await tournament_thread.fetch_message(db_match['id'])
+        except NotFound:
+            ch_match = challonge.matches.show(db_tournament['challonge']['id'], db_match['challonge_id'])
+            # Re-call the match in discord
+            new_match = await create_match(tournament_thread, guild, db_tournament, ch_match, db=False)
+            # Update match id in database
+            await set_match(guild.id, db_tournament, new_match)
+            print(f"Repaired match ['id'='{db_match['id']}'].")
+            count += 1
+    await interaction.followup.send(f"Successfully repaired {count} matches.")
     return True
 
 async def reset_match(interaction: Interaction, match_id):
     """
+    TODO (just use /t report for now)
     Resets a match and recalls the message.
     """
     
@@ -446,7 +454,7 @@ async def update_player(guild_id: int, db_tournament: dict, match_id: int,
 
 async def set_match(guild_id: int, db_tournament: dict, db_match: dict):
     """
-    Updates the players in a match.
+    Updates a match document in the database.
     """
     tournament_name = db_tournament['title']
     match_index = _tournament.find_index_in_tournament(db_tournament, MATCHES, 'id', db_match['id'])
@@ -472,14 +480,14 @@ async def fetch_tournament_and_match(interaction: Interaction, db_guild: dict, m
     if not db_match:
         await interaction.followup.send(f"`match_id` is invalid.", ephemeral=True)
         return (None, None)
-    return db_tournament, db_match
+    return (db_tournament, db_match)
 
 async def parse_vote(interaction: Interaction, db_guild: dict, match_challonge_id: int, vote: str):
     """
     Parses a vote argument that can either be an emote (1 or 2) or a player name.
     """
     # Fetch active tournament and targeted match
-    db_tournament, db_match = fetch_tournament_and_match(interaction, db_guild, match_challonge_id)
+    db_tournament, db_match = await fetch_tournament_and_match(interaction, db_guild, match_challonge_id)
     if not db_tournament or not db_match:
         return False
     # Check vote emote

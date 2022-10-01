@@ -87,10 +87,10 @@ async def vote(interaction: Interaction, match_id: int, vote: str):
     await interaction.response.defer(ephemeral=True)
     await match.vote_match(interaction, match_id, vote.strip())
 
-@TournamentGroup.command(description="Recalls a match if it is missing.")
-async def medic(interaction: Interaction, match_id: int):
+@TournamentGroup.command(description="Recalls all missing matches in a tournament.")
+async def medic(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
-    await match.repair_match(interaction, match_id)
+    await match.repair_match(interaction, title.strip())
 
 @TournamentGroup.command(description="Disqualifies or removes an participant from a tournament bracket.")
 async def disqualify(interaction: Interaction, user_mention: str):
