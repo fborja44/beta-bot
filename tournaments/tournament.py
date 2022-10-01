@@ -963,7 +963,7 @@ def create_help_embed(interaction: Interaction):
     # Set Seed
     set_seed_value = f"""Sets the seed for a participant in a tournament.
                     `/t seed user_mention: `<@{interaction.client.user.id}> `seed: 1`
-                    `/t seed user_mention: `<@{interaction.client.user.id}> `seed: 1`title: GENESIS 9`"""
+                    `/t seed user_mention: `<@{interaction.client.user.id}> `seed: 1 title: GENESIS 9`"""
     embed.add_field(name='/t seed', value=set_seed_value, inline=False)
     # Randomize Seeding
     randomize_value = """Randomizes the seeding for a tournament.
@@ -1001,24 +1001,26 @@ def create_help_embed(interaction: Interaction):
                     `/t results`
                     `/t results title: GENESIS 9`"""
     embed.add_field(name='/t results', value=results_value, inline=False)
+    # Disqualify
+    disqualify_value = f"""Disqualifies a user from a tournament.
+                        `/t disqualify user_mention:` <@{interaction.client.user.id}>"""
+    embed.add_field(name='/t disqualify', value=disqualify_value, inline=False)
     # Vote
     vote_value = f"""Vote for a winner in a tournament match.
-                    `/t vote match_id: 1034908912 vote: ` <@{interaction.client.user.id}>
-                    `/t vote match_id: 1034908912 vote: 1️⃣`
-                    `/t vote match_id: 1034908912 vote: 1`"""
-    embed.add_field(name='/t vote', value=vote_value, inline=False)
+                    `/match vote match_id: 1034908912 vote: ` <@{interaction.client.user.id}>
+                    `/match vote match_id: 1034908912 vote: 1️⃣`
+                    `/match vote match_id: 1034908912 vote: 1`"""
+    embed.add_field(name='/match vote', value=vote_value, inline=False)
     # Report
-    report_value = f"""[ADMIN] Manually report the result of a tournament match.
-                    `/t report match_id: 1034908912 winner: ` <@{interaction.client.user.id}>
-                    `/t report match_id: 1034908912 winner: 1️⃣`
-                    `/t report match_id: 1034908912 winner: 1`"""
-    embed.add_field(name='/t report', value=report_value, inline=False)
-    # Disqualify
-    disqualify_value = f"""Vote for a winner in a tournament match.
-                    `/t vote match_id: 1034908912 vote: ` <@{interaction.client.user.id}>
-                    `/t vote match_id: 1034908912 vote: 1️⃣`
-                    `/t vote match_id: 1034908912 vote: 1`"""
-    embed.add_field(name='/t disqualify', value=disqualify_value, inline=False)
+    report_value = f"""Manually report the result of a tournament match.
+                    `/match report match_id: 1034908912 winner: ` <@{interaction.client.user.id}>
+                    `/match report match_id: 1034908912 winner: 1️⃣`
+                    `/match report match_id: 1034908912 winner: 1`"""
+    embed.add_field(name='/match report', value=report_value, inline=False)
+    # Medic
+    report_value = f"""Re-calls any missing matches in discord.
+                    `/match medic`"""
+    embed.add_field(name='/match medic', value=report_value, inline=False)
     # Footer
     embed.set_footer(text=f'For more detailed docs, see the README on GitHub.')
     # GitHub Button

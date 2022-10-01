@@ -152,7 +152,7 @@ async def delete_tournament_channel(interaction: Interaction, channel_mention: s
     # Delete all brackets in channel if they have not been completed
     incomplete_tournaments = _tournament.find_incomplete_tournaments(db_guild)
     for db_tournament in incomplete_tournaments:
-        if db_tournament['channel_id'] == tournament_channel.id: # TODO: Test
+        if db_tournament['channel_id'] == tournament_channel.id:
             try:
                 db_guild = await _guild.pull_from_guild(guild, TOURNAMENTS, db_tournament)
                 print(f"Deleted tournament ['name'='{db_tournament['title']}'] in database.")
@@ -295,7 +295,9 @@ async def add_channel_to_alerts(interaction: Interaction, tournament_channel: st
     # Check if valid tournament channel
     db_tournament_channel = find_tournament_channel(db_guild, t_channel.id)
     if not db_tournament_channel:
-        await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", ephemeral=True) # TODO: list tournament channels
+        channel_id_list = get_tournament_channel_ids(db_guild)
+        channel_embed = create_channel_list_embed(channel_id_list, f"Tournament Channels for '{guild.name}'")
+        await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", embed=channel_embed, ephemeral=True)
         return False
     a_channel: TextChannel = parse_channel_mention(interaction, alert_channel)
     if not a_channel:
@@ -305,9 +307,9 @@ async def add_channel_to_alerts(interaction: Interaction, tournament_channel: st
     if str(a_channel.type) != 'text':
         await interaction.followup.send(f"`alert_channel` must be a valid text channel to receive alerts.", ephemeral=True)
         return False
-    # Check if a_channel is a tournament channel; if it is, invalid
-    if find_tournament_channel(db_guild, a_channel.id):
-        await interaction.followup.send(f"<#{a_channel.id}> is a tournament channel and cannot be set to receive alerts.", ephemeral=True)
+    # Check if sending alerts to self
+    if a_channel.id == t_channel.id:
+        await interaction.followup.send(f"`alert_channel` cannot be the same as `tournament_channel`.", ephemeral=True)
         return False
     # Add channel to guild
     db_tournament_channel['alert_channels'].append(a_channel.id)
@@ -332,7 +334,9 @@ async def remove_channel_from_alerts(interaction: Interaction, tournament_channe
     # Check if valid tournament channel
     db_tournament_channel = find_tournament_channel(db_guild, t_channel.id)
     if not db_tournament_channel:
-        await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", ephemeral=True) # TODO: list tournament channels
+        channel_id_list = get_tournament_channel_ids(db_guild)
+        channel_embed = create_channel_list_embed(channel_id_list, f"Tournament Channels for '{guild.name}'")
+        await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", embed=channel_embed, ephemeral=True)
         return False
     a_channel = parse_channel_mention(interaction, alert_channel)
     if not a_channel:
@@ -373,7 +377,9 @@ async def list_alert_channels(interaction: Interaction, tournament_channel: str)
     # Check if valid tournament channel
     db_tournament_channel = find_tournament_channel(db_guild, t_channel.id)
     if not db_tournament_channel:
-        await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", ephemeral=True) # TODO: list tournament channels
+        channel_id_list = get_tournament_channel_ids(db_guild)
+        channel_embed = create_channel_list_embed(channel_id_list, f"Tournament Channels for '{guild.name}'")
+        await interaction.followup.send(f"<#{t_channel.id}> is not a valid tournament channel.", embed=channel_embed,ephemeral=True)
         return False
     channel_id_list = db_tournament_channel['alert_channels']
     list_embed = create_channel_list_embed(channel_id_list, f"Alert Channels for '{t_channel.name}'")
@@ -410,7 +416,7 @@ def parse_channel_mention(interaction: Interaction, channel_mention: str):
     if channel_mention is not None and len(channel_mention.strip()) > 0:
         matched_channel = channel_match.search(channel_mention)
         if matched_channel:
-            return interaction.guild.get_channel_or_thread(int(channel_mention[2:-1])) or None # TODO: test
+            return interaction.guild.get_channel_or_thread(int(channel_mention[2:-1])) or None
         else:
             return None
     else: 
@@ -484,10 +490,25 @@ def create_help_embed(interaction: Interaction):
                     `/ch create channel_name: ssbm is_forum: False allow_messages: False`
                     `/ch create channel_name: ssbm is_forum: False category_name: games`"""
     embed.add_field(name='/ch create', value=create_value, inline=False)
+    # Set
+    create_value = """Sets an existing channel to be a tournament channel.
+                    `/ch set`
+                    `/ch set channel_mention: ssbm`"""
+    embed.add_field(name='/ch set', value=create_value, inline=False)
     # List
     list_value = """Lists all current tournament channels.
                     `/ch list`"""
-    embed.add_field(name='/ch create', value=list_value, inline=False)
+    embed.add_field(name='/ch list', value=list_value, inline=False)
+    # Remove
+    remove_value = """Removes a channel as a tournament channel. All incomplete tournaments are deleted.
+                    `/ch remove`
+                    `/ch remove channel_mention: ssbm`"""
+    embed.add_field(name='/ch remove', value=remove_value, inline=False)
+    # Delete
+    delete_value = """Deletes a tournament channel. All incomplete tournaments are also deleted.
+                    `/ch delete`
+                    `/ch delete channel_mention: ssbm`"""
+    embed.add_field(name='/ch delete', value=delete_value, inline=False)
     # Join
     delete_value = f"""Delete a tournament channel.
                     `/ch delete`

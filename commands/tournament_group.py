@@ -77,21 +77,6 @@ async def results(interaction: Interaction, title: str=""):
     await interaction.response.defer()
     await tournament.send_results(interaction, title.strip())
 
-@TournamentGroup.command(description="Manually reports the result for a tournament bracket match.")
-async def report(interaction: Interaction, match_id: int, winner: str):
-    await interaction.response.defer()
-    await match.override_match_result(interaction, match_id, winner.strip())
-
-@TournamentGroup.command(description="Manually vote for a tournament bracket match.")
-async def vote(interaction: Interaction, match_id: int, vote: str):
-    await interaction.response.defer(ephemeral=True)
-    await match.vote_match(interaction, match_id, vote.strip())
-
-@TournamentGroup.command(description="Recalls all missing matches in a tournament.")
-async def medic(interaction: Interaction, title: str=""):
-    await interaction.response.defer(ephemeral=True)
-    await match.repair_match(interaction, title.strip())
-
 @TournamentGroup.command(description="Disqualifies or removes an participant from a tournament bracket.")
 async def disqualify(interaction: Interaction, user_mention: str):
     await interaction.response.defer()

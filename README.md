@@ -75,8 +75,17 @@ Tournaments must be created in designiated tournament channels. To see the list 
 - Shows the results for the specified tournament if it has been completed. 
 - If `title` is not provided, targets the subject tournament in the thread.
 
+#### Disqualify
+`/t disqualify <user_mention: str>`:
+- Privileged instruction: Only authorized users can perform it.
+- Disqualifies an entrant from the target tournament.
+- `user_mention` must be a valid Discord user mention.
+- If the tournament has not been started, removes the entrant instead.
+- Must be sent in a tournament thread.
+
+### Matches
 #### Report
-`/t report <match_id: int> <winner: str>`
+`/match report <match_id: int> <winner: str>`
 - Privileged instruction: Only authorized users can perform it.
 - Manually reports the winner for a match, or overrides the result of a completed match.
 - All matches ahead of the overwritten match are automatically reset.
@@ -84,17 +93,14 @@ Tournaments must be created in designiated tournament channels. To see the list 
 - Must be sent in a tournament thread.
 
 #### Vote
-`/t vote <match_id: int> <vote: str>`
+`/match vote <match_id: int> <vote: str>`
 - Manually votes for the winner of a match if the user is a participant in that match.
 - `vote` must be either a user mention, '1', '2', '1️⃣', or '2️⃣'
 - Must be sent in a tournament thread.
 
-#### Disqualify
-`/t disqualify <user_mention: str>`:
-- Privileged instruction: Only authorized users can perform it.
-- Disqualifies an entrant from the target tournament.
-- `user_mention` must be a valid Discord user mention.
-- If the tournament has not been started, removes the entrant instead.
+#### Medic
+`/match medic`
+- Re-calls any missing matches for a tournament in discord.
 - Must be sent in a tournament thread.
 
 ### Channels
@@ -104,14 +110,26 @@ Manage and configure tournament channels and alerts. A tournament channel must b
 - Sends a list of channel configuration commands.
 
 #### create
-`/ch create <channel_name: str> <is_forum: bool> [allow_messages: bool] [target_category: str]`:
+`/ch create <channel_name: str> <is_forum: bool> [target_category: str]`:
 - Privileged instruction: Only authorized users can perform it.
 - Creates a new tournament channel.
 - If `is_forum` is true, created as a Forum Channel if available in the server, otherwise the channel is created as a Text Channel.
 
+#### set
+`/ch set <channel_name: str>`:
+- Privileged instruction: Only authorized users can perform it.
+- Sets an existing channel to be a tournament channel.
+
 ### list
 `/ch list`:
 - Lists all current tournament channels in the server.
+
+#### remove
+`/ch remove [channel_mention: str]`:
+- Privileged instruction: Only authorized users can perform it.
+- Removes the target channel from being a tournament channel.
+- All incomplete tournaments created in the target channel are deleted. Tournaments that have been finalized persist in the database and the channel.
+- If `channel_mention` is not provided, targets the channel the command was sent in.
 
 #### delete
 `/ch delete [channel_mention: str]`:
@@ -120,12 +138,14 @@ Manage and configure tournament channels and alerts. A tournament channel must b
 - All incomplete tournaments created in the target channel are also deleted. Tournaments that have been finalized persist in the database.
 - If `channel_mention` is not provided, targets the channel the command was sent in.
 
+
 #### alert
 `/ch alert <tournament_channel: str> [alert_channel: str]`:
 - Privileged instruction: Only authorized users can perform it.
 - Adds `alert_channel` to receive tournament alerts from `tournament_channel`.
 - `alert_channel` and `tournament_channel` must be valid Discord channel mentions.
 - If `alert_channel` is not provided, targets the channel the command was sent in.
+- `alert_channel` must be a Text Channel and not set to be a tournament channel.
 
 #### remove_alert
 `/ch remove_alert <tournament_channel: str> [alert_channel: str]`:
