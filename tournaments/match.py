@@ -67,10 +67,8 @@ async def create_match(tournament_thread: Thread, guild: Guild, db_tournament: d
     # Send embed message
     embed = create_match_embed(db_tournament, new_match)
     button_view = voting_buttons_view()
-    player1_button = discord.ui.Button(emoji='1️⃣', label=player1['name'], style=discord.ButtonStyle.grey, custom_id="1️⃣")
-    player1_button.callback = button_view.vote_player
-    player2_button = discord.ui.Button(emoji='2️⃣', label=player2['name'], style=discord.ButtonStyle.grey, custom_id="2️⃣")
-    player2_button.callback = button_view.vote_player
+    player1_button = voting_button(emoji='1️⃣', label=player1['name'], style=discord.ButtonStyle.grey)
+    player2_button = voting_button(emoji='2️⃣', label=player2['name'], style=discord.ButtonStyle.grey)
     button_view.add_item(player1_button)
     button_view.add_item(player2_button)
     match_message = await tournament_thread.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed, view=button_view)
@@ -115,7 +113,7 @@ async def delete_match(channel: TextChannel, db_tournament: dict, match_id: int)
         return False
     return True
 
-async def vote_match_button(interaction: Interaction, button_id: str):
+async def vote_match_button(interaction: Interaction, button: Button):
     """
     Reports the winner for a tournament match using buttons.
     button_id is expected to be 1️⃣ or 2️⃣.
@@ -125,22 +123,25 @@ async def vote_match_button(interaction: Interaction, button_id: str):
     message: Message = interaction.message
     db_guild = await _guild.find_guild(guild.id)
     match_message: Message = await channel.fetch_message(message.id)
-
-    if button_id not in ['1️⃣', '2️⃣']:
+    emoji = button.emoji.name
+    # Check args
+    if emoji not in ['1️⃣', '2️⃣']:
         await interaction.followup.send('Invalid vote.')
         return False
-
     # Get current active tournament, if any
     db_tournament = _tournament.find_active_tournament(db_guild)
     if not db_tournament:
         return False
     # Check if reaction was on a match message
     db_match = find_match(db_tournament, match_message.id)
-    if not db_match or db_match['completed']:
+    if not db_match:
         return False
-    
+    # Match is already completed
+    if db_match['completed']:
+        await interaction.followup.send("This match has already been completed.")
+        return False
     # Call main vote recording function
-    return await record_vote(interaction, button_id, match_message, db_guild, db_match, db_tournament)
+    return await record_vote(interaction, emoji, match_message, db_guild, db_match, db_tournament)
 
 async def vote_match(interaction: Interaction, match_challonge_id: int, vote: str):
     """
@@ -150,13 +151,16 @@ async def vote_match(interaction: Interaction, match_challonge_id: int, vote: st
     channel: TextChannel = interaction.channel
     db_guild = await _guild.find_guild(guild.id)
     vote_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, vote)
-    if not db_tournament:
+    if not db_tournament or not db_match or not vote_emote:
         return False
     # Check if in valid channel
     if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     if not vote_emote:
         return False
+    # Match is already completed
+    if db_match['completed']:
+        await interaction.followup.send("This match has already been completed.")
     match_message: Message = await channel.fetch_message(db_match['id'])
     # Call main vote recording function
     return await record_vote(interaction, vote_emote, match_message, db_guild, db_match, db_tournament)
@@ -386,7 +390,7 @@ async def repair_match(interaction: Interaction, tournament_title: str=""):
     db_guild = await _guild.find_guild(guild.id)
     # Validate arguments
     try:
-        db_tournament, tournament_title, tournament_thread, tournament_channel = await _tournament.validate_arguments_tournament(
+        db_tournament, tournament_title, tournament_thread, _ = await _tournament.validate_arguments_tournament(
             interaction, db_guild, tournament_title)
     except ValueError:
         return False
@@ -425,13 +429,14 @@ class voting_buttons_view(discord.ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
-    async def vote_player(self: discord.ui.View, interaction: discord.Interaction): # TODO: refactor
+class voting_button(discord.ui.Button):
+    async def callback(self: Button, interaction: Interaction):
         """
         Callback method for voting buttons.
         """
         await interaction.response.defer(ephemeral=True)
-        button_id = interaction.data['custom_id']
-        await vote_match_button(interaction, button_id)
+        await vote_match_button(interaction, self)
+        
 
 ######################
 ## HELPER FUNCTIONS ##
@@ -489,7 +494,7 @@ async def parse_vote(interaction: Interaction, db_guild: dict, match_challonge_i
     # Fetch active tournament and targeted match
     db_tournament, db_match = await fetch_tournament_and_match(interaction, db_guild, match_challonge_id)
     if not db_tournament or not db_match:
-        return False
+        return (None, None, None)
     # Check vote emote
     vote_emote = valid_vote_emote(vote)
     # Find by name if applicable
