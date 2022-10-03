@@ -102,13 +102,12 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, to
         'active': True,
         }
     try:
-        updated_guild = await _tournament.add_to_tournament(guild.id, tournament_title, 'participants', new_participant)
-        db_tournament['participants'].append(new_participant)
+        db_guild, db_tournament = await _tournament.add_to_tournament(guild.id, tournament_title, 'participants', new_participant)
     except:
         print(f"Failed to add user '{new_participant['name']}' to tournament ['title'='{tournament_title}'] participants.")
         if respond: await interaction.followup.send(f"Something went wrong when trying to join '***{tournament_title}***'.", ephemeral=True)
         return False
-    if updated_guild:
+    if db_guild:
         print(f"Added participant '{new_participant['name']}' ['id'='{user.id}'] to tournament ['title'='{tournament_title}'].")
         # Update message
         await _tournament.edit_tournament_message(db_tournament, tournament_channel, tournament_thread)
@@ -162,13 +161,12 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
         return False
     # Remove user from participants list
     try:
-        updated_guild = await _tournament.remove_from_tournament(guild.id, tournament_title, 'participants', db_participant['id'])
-        db_tournament['participants'] = list(filter(lambda participant: participant['id'] != user.id, db_tournament['participants']))
+        db_guild, db_tournament = await _tournament.remove_from_tournament(guild.id, tournament_title, 'participants', db_participant['id'])
     except:
         print(f"Failed to remove user '{db_participant['name']}' from tournament ['title'='{tournament_title}'] participants.")
         if respond: await interaction.followup.send(f"Something went wrong when trying to leave '***{tournament_title}***'.", ephemeral=True)
         return False
-    if updated_guild:
+    if db_guild:
         print(f"Removed participant ['name'='{db_participant['name']}']from tournament [id='{tournament_id}'].")
         # Update message
         await _tournament.edit_tournament_message(db_tournament, tournament_channel, tournament_thread) # breaks in forum channel

@@ -1,6 +1,6 @@
 from discord import app_commands, Guild, Member, Message, Interaction
 from colorama import Fore, Back, Style
-from commands import challenge_group, channel_group, leaderboard_group, tournament_group
+from commands import challenge_group, channel_group, leaderboard_group, tournament_group, match_group
 from guilds import channel as _channel
 from pprint import pprint
 from pymongo import MongoClient
@@ -86,6 +86,9 @@ tree.add_command(channel_group.ChannelGroup, guild=discord.Object(id=71319080668
 
 tree.add_command(tournament_group.TournamentGroup, guild=TEST_GUILD)
 tree.add_command(tournament_group.TournamentGroup, guild=discord.Object(id=713190806688628786))
+
+tree.add_command(match_group.MatchGroup, guild=TEST_GUILD)
+tree.add_command(match_group.MatchGroup, guild=discord.Object(id=713190806688628786))
 
 # tree.add_command(challenge_group.ChallengeGroup, guild=TEST_GUILD)
 # tree.add_command(challenge_group.ChallengeGroup, guild=discord.Object(id=713190806688628786))

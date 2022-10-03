@@ -197,7 +197,7 @@ async def remove_as_tournament_channel(interaction: Interaction, channel_mention
         return False
     # Check if the channel has an active tournament
     active_tournament = _tournament.find_active_tournament(db_guild)
-    if active_tournament['channel_id'] == channel.id:
+    if active_tournament is not None and active_tournament['channel_id'] == channel.id:
         await interaction.follow.send(f"Unable to remove tournament channel. This channel has an active tournament '***{active_tournament['title']}***'.")
         return False
     # Delete incomplete tournaments
@@ -205,9 +205,9 @@ async def remove_as_tournament_channel(interaction: Interaction, channel_mention
     for db_tournament in incomplete_tournaments:
         if db_tournament['channel_id'] == channel.id:
             await _tournament.delete_tournament(interaction, db_tournament['title'], respond=False)
-    printlog(f"User '{user.name}#{user.discriminator}' removed tournament channel '{channel.name}'.")
     # Delete from database
     await delete_tournament_channel_db(db_guild, channel.id)
+    print(f"User '{user.name}#{user.discriminator}' removed tournament channel '{channel.name}'.")
     await interaction.followup.send(f"Succesfully removed <#{channel.id}> as a tournament channel.")
     return True
 

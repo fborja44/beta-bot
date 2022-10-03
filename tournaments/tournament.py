@@ -290,8 +290,11 @@ async def delete_tournament(interaction: Interaction, tournament_title: str, res
         try:
             tournament_message: Message = await tournament_channel.fetch_message(db_tournament['id'])
             await tournament_message.delete() # delete message from channel
-        except:
-            print(f"Failed to delete message for tournament '{tournament_title}' ['id'='{db_tournament['id']}'].")
+        except discord.NotFound:
+            print(f"Failed to delete message for tournament '{tournament_title}' ['id'='{db_tournament['id']}']; Not found.")
+        except discord.Forbidden:
+            print(f"Failed to delete message for tournament '{tournament_title}' ['id'='{db_tournament['id']}']; Bot does not have proper permissions.")
+            return False
     if respond and interaction.channel.id != tournament_thread.id: await interaction.followup.send(f"Successfully deleted tournament '***{tournament_title}***'.")
     return retval
 
@@ -412,7 +415,7 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     matches = list(filter(lambda match: (match['state'] == 'open'), challonge_matches))
     for match in matches:
         try:
-            await _match.create_match(tournament_thread, guild, db_tournament, match)
+            await _match.create_match(tournament_thread, db_guild, db_tournament, match)
         except Exception as e:
             printlog(f"Failed to add match ['match_id'='{match['id']}'] to tournament ['title'='{tournament_title}']", e)
     # Update embed message
@@ -509,8 +512,7 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
         p_index = find_index_in_tournament(db_tournament, 'participants', 'challonge_id', ch_participant['id'])
         db_participants[p_index].update({'placement': ch_participant['final_rank']})
     db_tournament['participants'] = db_participants
-    await set_tournament(guild.id, tournament_title, db_tournament)
-
+    # await set_tournament(guild.id, tournament_title, db_tournament)
     # Create results message
     db_tournament['completed'] = completed_time # update completed time
     embed = create_results_embed(db_tournament)
@@ -614,7 +616,7 @@ async def valid_tournament_channel(db_tournament: dict, interaction: Interaction
         return None
     return interaction.guild.get_channel_or_thread(db_tournament['channel_id']) # Returns the tournament channel (text or forum), not the tournament thread
 
-async def valid_tournament_thread(db_tournament: dict, interaction: Interaction, respond: bool=True):
+async def valid_tournament_thread(db_tournament: dict, interaction: Interaction, respond: bool=True): # TODO: fix args
     """
     Checks if performing command in the tournament thread.
     """
@@ -622,7 +624,7 @@ async def valid_tournament_thread(db_tournament: dict, interaction: Interaction,
     if db_tournament['id'] != channel_id: 
         if respond: await interaction.followup.send(f"Command only available in <#{db_tournament['id']}>.", ephemeral=True)
         return None
-    return interaction.guild.get_channel_or_thread(db_tournament['channel_id'])
+    return interaction.guild.get_channel_or_thread(db_tournament['id'])
 
 async def find_valid_tournament(interaction: Interaction, db_guild: dict, tournament_title: str=""):
     """"
@@ -663,33 +665,36 @@ def find_index_in_tournament(db_tournament: dict, target_field: str, target_key:
 async def set_tournament(guild_id: int, tournament_title: str, new_tournament: dict):
     """
     Sets a tournament in a guild to the specified document.
-    TODO: Return subdocument that was updated.
+    Returns the updated guild and updated tournament.
     """
-    return await mdb.update_single_document(
+    updated_guild = await mdb.update_single_document(
         {'guild_id': guild_id, 'tournaments.title': tournament_title, 'tournaments.id': new_tournament['id']}, 
         {'$set': {f'tournaments.$': new_tournament}
         },
         GUILDS)
+    return updated_guild, find_tournament(updated_guild, tournament_title)
 
 async def add_to_tournament(guild_id: int, tournament_title: str, target_field: str, document: dict):
     """
     Pushes a document to a tournament subarray.
-    TODO: Return subdocument that was updated.
+    Returns the updated guild and updated tournament.
     """
-    return await mdb.update_single_document(
+    updated_guild = await mdb.update_single_document(
         {'guild_id': guild_id, 'tournaments.title': tournament_title}, 
         {'$push': {f'tournaments.$.{target_field}': document}},
         GUILDS)
+    return updated_guild, find_tournament(updated_guild, tournament_title)
 
 async def remove_from_tournament(guild_id: int, tournament_title: str, target_field: str, target_id: int):
     """
     Pulls a document from a tournament subarray.
-    TODO: Return subdocument that was updated.
+    Returns the updated guild and updated tournament.
     """
-    return await mdb.update_single_document(
+    updated_guild = await mdb.update_single_document(
         {'guild_id': guild_id, 'tournaments.title': tournament_title}, 
         {'$pull': {f'tournaments.$.{target_field}': {'id': target_id}}},
         GUILDS)
+    return updated_guild, find_tournament(updated_guild, tournament_title)
 
 async def delete_all_matches(channel: TextChannel, db_tournament: dict):
     """

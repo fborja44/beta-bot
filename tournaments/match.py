@@ -33,12 +33,11 @@ def find_match_by_challonge_id(db_tournament: dict, challonge_id: int):
         return result[0]
     return None
 
-async def create_match(tournament_thread: Thread, guild: Guild, db_tournament: dict, challonge_match, db: bool=True):
+async def create_match(tournament_thread: Thread, db_guild: dict, db_tournament: dict, challonge_match, db: bool=True):
     """
     Creates a new match in a tournament.
     """
-    tournament_name = db_tournament['title']
-    guild_id = guild.id
+    tournament_title = db_tournament['title']
     # Create match message and embed
     # Get player names
     player1 = list(filter(lambda participant: (participant['challonge_id'] == challonge_match['player1_id']), db_tournament['participants']))[0]
@@ -77,41 +76,46 @@ async def create_match(tournament_thread: Thread, guild: Guild, db_tournament: d
     new_match['id'] = match_message.id
     if db:
         try:
-            await _tournament.add_to_tournament(guild_id, tournament_name, MATCHES, new_match)
-            print(f"Added new match ['id'='{match_message.id}'] to tournament ['name'='{tournament_name}'].")
+            db_guild, db_tournament = await _tournament.add_to_tournament(db_guild['guild_id'], tournament_title, MATCHES, new_match)
+            print(f"Added new match ['id'='{match_message.id}'] to tournament ['name'='{tournament_title}'].")
         except Exception as e:
-            printlog(f"Failed to add match ['id'={new_match['id']}] to tournament ['name'='{tournament_name}'].", e)
+            printlog(f"Failed to add match ['id'={new_match['id']}] to tournament ['name'='{tournament_title}'].", e)
             return None
     return new_match
 
-async def delete_match(channel: TextChannel, db_tournament: dict, match_id: int):
+async def delete_match(tournament_thread: Thread, db_tournament: dict, match_id: int):
     """
-    Deletes a match.
+    Deletes a match, and recursively deletes all dependent matches.
     """
-    guild: Guild = channel.guild
+    guild: Guild = tournament_thread.guild
     guild_id = guild.id
-    tournament_name = db_tournament['title']
+    tournament_title = db_tournament['title']
     # Check if match is in database
     try:
         db_match = find_match(db_tournament, match_id)
     except:
         print("Something went wrong when checking database for match ['id'={match_id}].")
     if db_match:
+        # Recursively delete matches that come after this one
+        for next_match_id in db_match['next_matches']:
+            db_tournament = await delete_match(tournament_thread, db_tournament, next_match_id)
         # Delete from matches
         try:
-            await _tournament.remove_from_tournament(guild_id, tournament_name, MATCHES, match_id)
-            print(f"Deleted match ['id'='{db_match['id']}'] from tournament ['name'='{tournament_name}'].")
+            db_guild, db_tournament = await _tournament.remove_from_tournament(guild_id, tournament_title, MATCHES, match_id)
+            print(f"Deleted match ['id'='{db_match['id']}'] from tournament ['name'='{tournament_title}'].")
         except:
-            print(f"Failed to delete match [id='{match_id}'] from database.")
-            return False
+            print(f"Failed to delete match [id='{match_id}'] from database for tournament ['name'='{tournament_title}'].")
+            return None, None
     # Delete match message
     try:
-        match_message = await channel.fetch_message(db_match['id'])
+        match_message = await tournament_thread.fetch_message(db_match['id'])
         await match_message.delete() # delete message from channel
-    except:
-        printlog(f"Failed to delete message for match [id='{match_id}']. May not exist.")
-        return False
-    return True
+    except NotFound:
+        printlog(f"Failed to delete message for match [id='{match_id}']; Not found.")
+    except discord.Forbidden:
+        printlog(f"Failed to delete message for match [id='{match_id}']; Bot does not have proper permissions.")
+        return None, None
+    return db_guild, db_tournament
 
 async def vote_match_button(interaction: Interaction, button: Button):
     """
@@ -161,6 +165,7 @@ async def vote_match(interaction: Interaction, match_challonge_id: int, vote: st
     # Match is already completed
     if db_match['completed']:
         await interaction.followup.send("This match has already been completed.")
+        return False
     match_message: Message = await channel.fetch_message(db_match['id'])
     # Call main vote recording function
     return await record_vote(interaction, vote_emote, match_message, db_guild, db_match, db_tournament)
@@ -263,7 +268,7 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
     """
     Reports a match winner and fetches the next matches that have not yet been called.
     """
-    tournament_name = db_tournament['title']
+    tournament_title = db_tournament['title']
     tournament_challonge_id = db_tournament['challonge']['id']
     match_challonge_id = db_match['challonge_id']
     match_id = db_match['id']
@@ -286,7 +291,6 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
     except Exception as e:
         printlog(f"Failed to report match ['id'={match_id}] in database.", e)
         return None, None
-
     # Update match embed
     match_embed = match_message.embeds[0]
     participant1 = _participant.find_participant(db_tournament, db_match['player1']['id'])
@@ -295,37 +299,12 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
     confirm_embed.remove_field(1) # Remove votes field
     await match_message.edit(embed=confirm_embed, view=None)
     print("Succesfully reported match [id={0}]. Winner = '{1}'.".format(match_id, winner['name']))
-
-    # Check for matches that have not yet been called
-    try:
-        challonge_matches = challonge.matches.index(db_tournament['challonge']['id'], state='open')
-    except Exception as e:
-        printlog("Failed to get new matches.", e)
-        return None, None
-    # Check if last match
-    if len(challonge_matches) == 0 and db_match['round'] == db_tournament['num_rounds']:
-        await match_message.channel.send(f"'***{tournament_name}***' has been completed! Use `/t finalize {tournament_name}` to finalize the results!")
-        return db_match, winner
-    for challonge_match in challonge_matches:
-        # Check if match has already been called (in database)
-        try:
-            check_match = find_match_by_challonge_id(db_tournament, challonge_match['id'])
-        except:
-            print("Failed to check match in database..")
-            return None, None
-        if check_match:
-            continue
-        new_match = await create_match(match_message.channel, match_message.guild, db_tournament, challonge_match)
-        db_tournament['matches'].append(new_match)
-        # Add new match message_id to old match's next_matches list
-        try:
-            db_match['next_matches'].append(new_match['id'])
-            await set_match(db_guild['guild_id'], db_tournament, db_match)
-            print(f"Added new match ['id'={new_match['id']}] to completed match's ['id'='{db_match['id']}'] next matches.")
-        except Exception as e:
-            print(f"Failed to add new match ['id'='{new_match['id']}'] to next_matches of match ['id'='{match_id}']")
-            print(e)
-    
+    # Call new open matches
+    count = await call_open_matches(match_message.channel, db_guild, db_tournament)
+    # Check if was last match in the tournament
+    if count == 0 and db_match['round'] == db_tournament['num_rounds']:
+        await match_message.channel.send(f"'***{db_tournament['title']}***' has been completed! Use `/t finalize {db_tournament['title']}` to finalize the results!")
+        return True
     # Update tournament embed
     try:
         tournament_channel = await match_message.guild.fetch_channel(db_tournament['channel_id'])
@@ -336,10 +315,54 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
         updated_tournament_embed = _tournament.create_tournament_image(db_tournament, tournament_message.embeds[0])
         await tournament_message.edit(embed=updated_tournament_embed)
     except Exception as e:
-        printlog(f"Failed to create image for tournament ['name'='{tournament_name}'].", e)
-    
+        printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].", e)
     return db_match, winner
     
+async def call_open_matches(tournament_thread: Thread, db_guild: dict, db_tournament: dict):
+    """
+    Calls newly opened matches from challonge.
+    Returns the number of new open matches, or -1 if failed.
+    """
+    try:
+        challonge_matches = challonge.matches.index(db_tournament['challonge']['id'], state='open')
+    except Exception as e:
+        printlog("Failed to get new matches.", e)
+        return -1
+    for challonge_match in challonge_matches:
+        # Check if match has already been called (in database)
+        try:
+            check_match = find_match_by_challonge_id(db_tournament, challonge_match['id'])
+        except Exception as e:
+            printlog("Failed to check match in database.", e)
+            return -1
+        # Get match message too
+        if check_match:
+            pass
+        new_match = await create_match(tournament_thread, db_guild, db_tournament, challonge_match)
+        db_tournament['matches'].append(new_match)
+        # Add new match message_id to dependent matches' next_matches list
+        try:
+            db_match1 = find_match_by_challonge_id(db_tournament, challonge_match['player1_prereq_match_id'])
+            if db_match1:
+                db_match1['next_matches'].append(new_match['id'])
+                await set_match(db_guild['guild_id'], db_tournament, db_match1)
+                print(f"Added new match ['id'={new_match['id']}] to next_matches of match ['id'='{db_match1['id']}'].")
+        except Exception as e:
+            print(f"Failed to add new match ['id'='{new_match['id']}'] to next_matches of match ['id'='{db_match1['id']}']")
+            print(e)
+        try:
+            if challonge_match['player1_prereq_match_id'] != challonge_match['player2_prereq_match_id']:
+                db_match2 = find_match_by_challonge_id(db_tournament, challonge_match['player2_prereq_match_id'])
+                if db_match2:
+                    db_match2['next_matches'].append(new_match['id'])
+                    await set_match(db_guild['guild_id'], db_tournament, db_match2)
+                    print(f"Added new match ['id'={new_match['id']}] to next_matches of match ['id'='{db_match2['id']}'].")
+        except Exception as e:
+            print(f"Failed to add new match ['id'='{new_match['id']}'] to next_matches of match ['id'='{db_match2['id']}']")
+            print(e)
+            return -1
+    return len(challonge_matches)
+
 async def override_match_result(interaction: Interaction, match_challonge_id: int, winner: str):
     """
     Overrides the results of a match. The status of the match does not matter.
@@ -350,34 +373,30 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
     winner_emote, db_tournament, db_match = await parse_vote(interaction, db_guild, match_challonge_id, winner)
-    if not db_tournament:
+    if not db_tournament or not winner_emote or not db_match:
         return False
     # Check if in valid channel
-    if not await _tournament.valid_tournament_thread(db_tournament, interaction):
-        return False
-    if not winner_emote:
+    tournament_thread = await _tournament.valid_tournament_thread(db_tournament, interaction)
+    if not tournament_thread:
         return False
     # Check if actually changing the winner
     if db_match['winner_emote'] is not None and winner_emote == db_match['winner_emote']:
         await interaction.followup.send("Match report failed; Winner is the same.", ephemeral=True)
         return False
-    # Delete previously created matches
+    # Delete newly created matches
     next_matches = db_match['next_matches']
     if len(next_matches) > 0:
         for next_match_id in next_matches:
-            try:
-                await delete_match(channel, db_tournament, next_match_id)
-            except:
-                print(f"Something went wrong when deleting match ['id'={next_match_id}] while deleting tournament ['name'={db_tournament['title']}].")
+            db_guild, db_tournament = await delete_match(tournament_thread, db_tournament, next_match_id)
     # Report match
     match_message = await channel.fetch_message(db_match['id'])
     try:
-        _, winner = await report_match(match_message, db_guild, db_tournament, db_match, winner_emote)
+        _, db_winner = await report_match(match_message, db_guild, db_tournament, db_match, winner_emote)
     except Exception as e:
         printlog(f"Failed to report match ['id'='{db_match['id']}']", e)
         return False
-    printlog(f"User ['name'='{user.name}#{user.discriminator}'] overwrote result for match ['id'='{db_match['id']}']. Winner: {winner['name']} {winner_emote}.")
-    await interaction.followup.send(content=f"Match report successful. Winner: {winner['name']} {winner_emote}")
+    printlog(f"User ['name'='{user.name}#{user.discriminator}'] overwrote result for match ['id'='{db_match['id']}']. Winner: {db_winner['name']} {winner_emote}.")
+    await interaction.followup.send(content=f"Match report successful. Winner: {db_winner['name']} {winner_emote}")
     return True
 
 async def repair_match(interaction: Interaction, tournament_title: str=""):
@@ -407,7 +426,7 @@ async def repair_match(interaction: Interaction, tournament_title: str=""):
         except NotFound:
             ch_match = challonge.matches.show(db_tournament['challonge']['id'], db_match['challonge_id'])
             # Re-call the match in discord
-            new_match = await create_match(tournament_thread, guild, db_tournament, ch_match, db=False)
+            new_match = await create_match(tournament_thread, db_guild, db_tournament, ch_match, db=False)
             # Update match id in database
             await set_match(guild.id, db_tournament, new_match)
             print(f"Repaired match ['id'='{db_match['id']}'].")
@@ -415,11 +434,55 @@ async def repair_match(interaction: Interaction, tournament_title: str=""):
     await interaction.followup.send(f"Successfully repaired {count} matches.")
     return True
 
-async def reset_match(interaction: Interaction, match_id):
+async def reset_match(interaction: Interaction, match_challonge_id: int):
     """
-    TODO (just use /t report for now)
+    TODO: Test
     Resets a match and recalls the message.
     """
+    guild: Guild = interaction.guild
+    user: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, tournament_thread, _ = await _tournament.validate_arguments_tournament(
+        interaction, db_guild)
+    except ValueError:
+        return False
+    # Fetch match
+    db_match = find_match_by_challonge_id(db_tournament, match_challonge_id)
+    if not db_match:
+        await interaction.followup.send(f"`match_id` is invalid.", ephemeral=True)
+        return False
+    # Check if valid match
+    if not db_match['completed']:
+        await interaction.followup.send(f"This match has not been completed.")
+        return False
+    # Reset match on challonge
+    try:
+        challonge.matches.reopen(db_tournament['challonge']['id'], match_challonge_id) # does not return anything
+        ch_match = challonge.matches.show(db_tournament['challonge']['id'], match_challonge_id)
+    except Exception as e:
+        printlog(f"Failed to reset match ['id'='{match_challonge_id}'] on challonge in tournament '{tournament_title}'.", e)
+        await interaction.followup.send("Failed to reset match on Challonge.")
+        return False
+    # Delete match (and others that come out of it)
+    db_guild, db_tournament = await delete_match(tournament_thread, db_tournament, db_match['id'])
+    # Recreate match
+    await create_match(tournament_thread, db_guild, db_tournament, ch_match)
+    printlog(f"User '{user.name}#{user.discriminator}' reset match ['id'='{db_match['id']}'] in tournament '{tournament_title}'.")
+    # Update tournament embed
+    try:
+        tournament_channel = await tournament_thread.guild.fetch_channel(db_tournament['channel_id'])
+        if str(tournament_channel.type) == 'forum':
+            tournament_message: Message = await tournament_thread.fetch_message(db_tournament['id'])
+        else:
+            tournament_message: Message = await tournament_channel.fetch_message(db_tournament['id'])
+        updated_tournament_embed = _tournament.create_tournament_image(db_tournament, tournament_message.embeds[0])
+        await tournament_message.edit(embed=updated_tournament_embed)
+    except Exception as e:
+        printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].", e)
+    await interaction.followup.send(f"Match has been successfully reset.")
+    return True
     
 ##################
 ## BUTTON VIEWS ##
@@ -447,7 +510,7 @@ async def update_player(guild_id: int, db_tournament: dict, match_id: int,
     """
     Updates the players in a match.
     """
-    tournament_name = db_tournament['title']
+    tournament_title = db_tournament['title']
     match_index = _tournament.find_index_in_tournament(db_tournament, MATCHES, 'id', match_id)
     if updated_player1:
         db_tournament['matches'][match_index]['player1'] = updated_player1
@@ -455,16 +518,16 @@ async def update_player(guild_id: int, db_tournament: dict, match_id: int,
         db_tournament['matches'][match_index]['player2'] = updated_player2
     if not (updated_player1 or updated_player2):
         return None
-    return await _tournament.set_tournament(guild_id, tournament_name, db_tournament)
+    return await _tournament.set_tournament(guild_id, tournament_title, db_tournament)
 
 async def set_match(guild_id: int, db_tournament: dict, db_match: dict):
     """
     Updates a match document in the database.
     """
-    tournament_name = db_tournament['title']
+    tournament_title = db_tournament['title']
     match_index = _tournament.find_index_in_tournament(db_tournament, MATCHES, 'id', db_match['id'])
     db_tournament['matches'][match_index] = db_match
-    return await _tournament.set_tournament(guild_id, tournament_name, db_tournament)
+    return await _tournament.set_tournament(guild_id, tournament_title, db_tournament)
 
 async def fetch_tournament_and_match(interaction: Interaction, db_guild: dict, match_challonge_id: int):
     """
@@ -476,12 +539,7 @@ async def fetch_tournament_and_match(interaction: Interaction, db_guild: dict, m
         await interaction.followup.send(f"There are currently no active tournaments.", ephemeral=True)
         return (None, None)
     # Get match
-    try:
-        db_match = find_match_by_challonge_id(db_tournament, match_challonge_id)
-    except Exception as e:
-        printlog(f"Failed to find match ['challonge_id'='{match_challonge_id}'].", e)
-        await interaction.followup.send(f"Something went wrong when finding the match.", ephemeral=True)
-        return (None, None)
+    db_match = find_match_by_challonge_id(db_tournament, match_challonge_id)
     if not db_match:
         await interaction.followup.send(f"`match_id` is invalid.", ephemeral=True)
         return (None, None)
@@ -535,7 +593,7 @@ def create_match_embed(db_tournament: dict, db_match: dict):
     """
     Creates embed object to include in match message.
     """
-    tournament_name = db_tournament['title']
+    tournament_title = db_tournament['title']
     match_challonge_id = db_match['challonge_id']
     jump_url = db_tournament['jump_url']
     round = db_match['round']
@@ -548,7 +606,7 @@ def create_match_embed(db_tournament: dict, db_match: dict):
     # Main embed
     embed = Embed(title=f"⚔️ {round_name}", description=f"Awaiting result...\nOpened at {time}", color=GREEN)
     # Author field
-    # embed.set_author(name=tournament_name, url=jump_url, icon_url=ICON)
+    # embed.set_author(name=tournament_title, url=jump_url, icon_url=ICON)
     # Match info field
     if round_name == "Grand Finals Set 1" and len(db_tournament['participants']) > 2:
         embed.add_field(name=f"Players", value=f'1️⃣ [W] <@{player1_id}> vs <@{player2_id}> [L] 2️⃣', inline=False)

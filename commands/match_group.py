@@ -16,6 +16,11 @@ async def report(interaction: Interaction, match_id: int, winner: str):
     await interaction.response.defer()
     await match.override_match_result(interaction, match_id, winner.strip())
 
+@MatchGroup.command(description="Resets a match and all matches dependent on it.")
+async def reset(interaction: Interaction, match_id: int):
+    await interaction.response.defer()
+    await match.reset_match(interaction, match_id)
+
 @MatchGroup.command(description="Recalls all missing matches in a tournament.")
 async def medic(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
