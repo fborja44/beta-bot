@@ -74,15 +74,20 @@ async def finalize(interaction: Interaction, title: str=""):
 
 @TournamentGroup.command(description="Sends the results for a completed tournament bracket.")
 async def results(interaction: Interaction, title: str=""):
-    await interaction.response.defer()
+    await interaction.response.defer() # Change to ephemeral?
     await tournament.send_results(interaction, title.strip())
 
 @TournamentGroup.command(description="Disqualifies or removes an participant from a tournament bracket.")
 async def disqualify(interaction: Interaction, user_mention: str):
-    await interaction.response.defer()
+    await interaction.response.defer() # Change to ephemeral
     await participant.disqualify_participant_main(interaction, user_mention.strip())
 
-# @TournamentGroup.command(description="Disqualifies self from a tournament bracket.")
-# async def disqualify_self(interaction: Interaction):
-#     await interaction.response.defer()
-#     await bracket.disqualify_participant_main(interaction, interaction.user.name)
+@TournamentGroup.command(description="Opens the tournament bracket for registration.")
+async def open(interaction: Interaction, title: str=""):
+    await interaction.response.defer(ephemeral=True)
+    await tournament.open_close_tournament(interaction, title.strip(), open=True)
+
+@TournamentGroup.command(description="Opens the tournament bracket for registration.")
+async def close(interaction: Interaction, title: str=""):
+    await interaction.response.defer(ephemeral=True)
+    await tournament.open_close_tournament(interaction, title.strip(), open=False)

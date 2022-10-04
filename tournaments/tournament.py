@@ -58,7 +58,7 @@ def find_active_tournament(db_guild: dict):
     Returns the current active tournament in a guild.
     """
     try:
-        return list(filter(lambda tournament: not tournament['open'] and not tournament['completed'], db_guild['tournaments']))[0]
+        return list(filter(lambda tournament: tournament['in_progress'] and not tournament['completed'], db_guild['tournaments']))[0]
     except:
         return None
 
@@ -182,6 +182,7 @@ async def create_tournament(interaction: Interaction, tournament_title: str, tim
             'end_time': None, 
             'completed': False,
             'open': True,
+            'in_progress': False,
             'num_rounds': None
         }
         
@@ -312,8 +313,11 @@ async def update_tournament(interaction: Interaction, tournament_title: str , ne
     except ValueError:
         return False
     # Only allow updating if the tournament has not been started or completed
-    if not db_tournament['open'] or db_tournament['completed']:
-        await interaction.followup.send(f"You may only update tournaments in the registration phase.", ephemeral=True)
+    if db_tournament['in_progress']:
+        await interaction.followup.send(f"This tournament has been started; Unable to update tournament.", ephemeral=True)
+        return False
+    if db_tournament['completed']:
+        await interaction.followup.send(f"This tournament has been completed; Unable to update tournament.", ephemeral=True)
         return False
     # Check if updating info
     if not (new_tournament_title is not None or time is not None or single_elim is not None or max_participants is not None):
@@ -376,8 +380,8 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     except ValueError:
         return False
     # Check if already started
-    if not db_tournament['open']:
-        await interaction.followup.send(f"'***{tournament_title}***' has already been started.", ephemeral=True)
+    if db_tournament['in_progress']:
+        await interaction.followup.send(f"'***{tournament_title}***' is already in progress.", ephemeral=True)
         return False
     # Make sure there are sufficient number of participants
     if len(db_tournament['participants']) < MIN_ENTRANTS:
@@ -406,7 +410,7 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
        if round > max_round:
            max_round = round
     # Set tournament to closed in database and set total number of rounds
-    db_tournament.update({'open': False, 'num_rounds': max_round })
+    db_tournament.update({'open': False, 'in_progress': True, 'num_rounds': max_round })
     await set_tournament(guild.id, tournament_title, db_tournament)
     print(f"User ['name'='{user.name}#{user.discriminator}'] started tournament ['title'='{tournament_title}'].")
     # Send start message
@@ -438,8 +442,8 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
         return False
     challonge_id = db_tournament['challonge']['id']
     # Check if it has been started
-    if db_tournament['open']:
-        await interaction.followup.send(f"Cannot reset a tournament during the registration phase.", ephemeral=True)
+    if not db_tournament['in_progress']:
+        await interaction.followup.send(f"Cannot reset a tournament that is not in progress.", ephemeral=True)
         return False
     # Check if already completed
     if db_tournament['completed']: 
@@ -457,7 +461,7 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     except Exception as e:
         printlog(f"Something went wrong when resetting tournament ['title'='{tournament_title}'] on challonge.", e)
     # Set open to true and reset number of rounds
-    db_tournament.update({'open': True, 'num_rounds': None, 'matches': []})
+    db_tournament.update({'open': True, 'in_progress': False, 'num_rounds': None, 'matches': []})
     await set_tournament(guild.id, tournament_title, db_tournament)
     print(f"User ['name'='{user.name}#{user.discriminator}'] reset tournament ['title'='{tournament_title}'].")
     # Reset tournament message
@@ -553,6 +557,44 @@ async def send_results(interaction: Interaction, tournament_title: str):
     # Create results message
     results_embed = create_results_embed(db_tournament)
     await interaction.followup.send(embed=results_embed)
+    return True
+
+async def open_close_tournament(interaction: Interaction, tournament_title: str, open: bool=True):
+    """
+    Opens a tournament for registration.
+    """
+    guild: Guild = interaction.guild
+    user: Member = interaction.user
+    db_guild = await _guild.find_guild(guild.id)
+    action = 'opened'  if open else 'closed'
+    # Validate arguments
+    try:
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await validate_arguments_tournament(
+        interaction, db_guild, tournament_title)
+    except:
+        return False
+    # Only allow updating if the tournament has not been started or completed
+    if db_tournament['in_progress']:
+        await interaction.followup.send(f"This tournament has been started; Unable to update registration status.", ephemeral=True)
+        return False
+    if db_tournament['completed']:
+        await interaction.followup.send(f"This tournament has been completed; Unable to update registration status.", ephemeral=True)
+        return False
+    # Check if actually updating the status
+    if db_tournament['open'] == open:
+        await interaction.followup.send(f"Registration is already {action} for '***{tournament_title}***'.", ephemeral=True)
+        return False
+    # Update the tournament on challonge
+    challonge.tournaments.update(db_tournament['challonge']['id'], 
+        open_signup=open,
+    )
+    db_tournament['open'] = open
+    # Update the tournament in database
+    await set_tournament(guild.id, tournament_title, db_tournament)
+    print(f"User '{user.name}#{user.discriminator}' {action} registration in tournament ['title'='{tournament_title}'].")
+    # Update embed message
+    await edit_tournament_message(db_tournament, tournament_channel, tournament_thread)
+    await interaction.followup.send(f"Successfully {action} registration for '***{tournament_title}***'.")
     return True
 
 ##################
@@ -745,6 +787,22 @@ def parse_time(string: str):
 ## MESSAGE FUNCTIONS ##
 #######################
 
+def str_status(db_tournament: dict):
+    """
+    Returns the string representation of a tournament's status.
+    """
+    # Check the status
+    if db_tournament['completed']:
+        status = "Completed 🏁"
+    elif db_tournament['open']:
+        status = "Open for Registration! 🚨"
+    else:
+        if db_tournament['in_progress']:
+            status = "Started ⚔️"
+        else:
+            status = "Registration Closed 🔒"
+    return status
+
 def create_tournament_embed(db_tournament: dict, author: Member):
     """
     Creates embed object to include in tournament message.
@@ -754,12 +812,7 @@ def create_tournament_embed(db_tournament: dict, author: Member):
     time = db_tournament['start_time']
     
     # Check the status
-    if db_tournament['completed']:
-        status = "Completed 🏁"
-    elif db_tournament['open']:
-        status = "Open for Registration! 🚨"
-    else:
-        status = "Started 🟩"
+    status = str_status(db_tournament)
     # Main embed
     embed = Embed(title=f'🥊  {tournament_title}', description=f"Status: {status}", color=WOOP_PURPLE)
     # Author field
@@ -784,7 +837,6 @@ def create_tournament_embed(db_tournament: dict, author: Member):
 async def edit_tournament_message(db_tournament: dict, tournament_channel: TextChannel | ForumChannel, tournament_thread: Thread):
     """
     Edits tournament embed message in a channel.
-    TODO: Update content if made in forum channel
     """
     tournament_title = db_tournament['title']
     if str(tournament_channel.type) == 'forum':
@@ -793,29 +845,29 @@ async def edit_tournament_message(db_tournament: dict, tournament_channel: TextC
         tournament_message = await tournament_channel.fetch_message(db_tournament['id'])
     embed = tournament_message.embeds[0]
     embed = update_embed_participants(db_tournament, embed)
-    if db_tournament['completed']:
-        status = " Completed 🏁"
-    elif db_tournament['open']:
-        status = "Open for Registration 🚨"
-    else:
+    # Update the status
+    status = str_status(db_tournament)
+    if db_tournament['in_progress']:
         await tournament_message.edit(view=None)
-        status = "Started 🟩"
+    else:
+        await tournament_message.edit(view=registration_buttons_view())
     embed.description = f"Status: {status}"
-    if not db_tournament['open']:
+    # Add bracket image.
+    if db_tournament['in_progress']:
         image_embed = None
         try:
             image_embed = create_tournament_image(db_tournament, embed)
+            if not image_embed:
+                printlog(f"Error when creating image for tournament ['title'='{tournament_title}'].")
+            else:
+                embed = image_embed
         except Exception as e:
             printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].")
             print(e)
-        if not image_embed:
-            printlog(f"Error when creating image for tournament ['title'='{tournament_title}'].")
-        else:
-            embed = image_embed
     if db_tournament['completed']:
         time_str = db_tournament['completed'].strftime("%A, %B %d, %Y %#I:%M %p %Z") # time w/o ms
         embed.add_field(name=f'Completed At', value=f"{time_str}\nUse `/t results`", inline=False)
-    content = status if 'thread' in str(tournament_channel.type) and tournament_channel.parent.type == 'forum' else ""
+    content = status if tournament_channel.type == 'forum' else ""
     await tournament_message.edit(content=content, embed=embed)
     return True
 
@@ -827,8 +879,6 @@ def update_embed_participants(db_tournament: dict, embed: Embed):
     if len(participants) > 0:
         participants_content = ""
         for participant in participants:
-            # To mention a user:
-            # <@{user_id}>
             participants_content += f"> <@{participant['id']}>\n"
     else:
         participants_content = '> *None*'
@@ -843,30 +893,27 @@ def create_tournament_image(db_tournament: dict, embed: Embed):
     Converts the generated svg challonge image to png and uploads it to imgur.
     Discord does not support svg images in preview.
     """
+    if len(db_tournament['participants']) < 2:
+        return None
     tournament_title = db_tournament['title']
     challonge_url = db_tournament['challonge']['url']
-    if len(db_tournament['participants']) >= 2:
-        svg_url = f"{challonge_url}.svg"
-        # print("svg_url: ", svg_url)
-        png_data = svg2png(url=svg_url) # Convert svg to png
-        payload = {
-            'image': png_data
-        }
-        headers = {
-            'Authorization': f'Client-ID {IMGUR_CLIENT_ID}'
-        }
-        response = requests.request("POST", f"{IMGUR_URL}/image", headers=headers, data=payload, files=[])
-        if response.status_code == requests.codes.ok:
-            data = response.json()['data']
-            image_link = data['link']
-            embed.set_image(url=image_link)
-            return embed
-        else:
-            printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].")
-            return False
+    svg_url = f"{challonge_url}.svg"
+    png_data = svg2png(url=svg_url) # Convert svg to png
+    payload = {
+        'image': png_data
+    }
+    headers = {
+        'Authorization': f'Client-ID {IMGUR_CLIENT_ID}'
+    }
+    response = requests.request("POST", f"{IMGUR_URL}/image", headers=headers, data=payload, files=[])
+    if response.status_code == requests.codes.ok:
+        data = response.json()['data']
+        image_link = data['link']
+        embed.set_image(url=image_link)
+        return embed
     else:
         printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].")
-        return False
+        return None
 
 def create_seeding_embed(db_tournament: dict):
     """
@@ -874,7 +921,6 @@ def create_seeding_embed(db_tournament: dict):
     """
     tournament_title = db_tournament['title']
     challonge_url = db_tournament['challonge']['url']
-    # jump_url = db_tournament['jump_url']
     # Main embed
     embed = Embed(title=f"Seeding for '{tournament_title}'", description="", color=WOOP_PURPLE)
     # Author field
@@ -897,7 +943,6 @@ def create_results_embed(db_tournament: dict):
     """
     tournament_title = db_tournament['title']
     challonge_url = db_tournament['challonge']['url']
-    # jump_url = db_tournament['jump_url']
     # Main embed
     embed = Embed(title=f"🏆  Final Results for '{tournament_title}'", color=GOLD)
     # Author field

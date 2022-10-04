@@ -30,7 +30,7 @@ async def join_tournament(interaction: Interaction):
     db_tournament, _, tournament_thread = await _tournament.find_valid_tournament(interaction, db_guild)   
     if not db_tournament or not tournament_thread:
         return False
-    # Check if in valid channel
+    # Check if in valid thread
     if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     return await add_participant(interaction, db_tournament, tournament_thread)
@@ -45,7 +45,7 @@ async def leave_tournament(interaction: Interaction):
     db_tournament, _, tournament_thread = await _tournament.find_valid_tournament(interaction, db_guild)  
     if not db_tournament or not tournament_thread:
         return False
-    # Check if in valid channel
+    # Check if in valid thread
     if not await _tournament.valid_tournament_thread(db_tournament, interaction):
         return False
     return await remove_participant(interaction, db_tournament, tournament_thread)
@@ -59,8 +59,9 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, to
     user: Member = member or interaction.user
     db_guild = await _guild.find_add_guild(guild)
     # Fetch tournament
-    db_tournament = db_tournament or _tournament.find_tournament_by_id(db_guild, message.id)
-    if not db_tournament or not db_tournament['open']:
+    if not db_tournament:
+        db_tournament = _tournament.find_tournament_by_id(db_guild, message.id)
+    if not db_tournament or not db_tournament['open'] or db_tournament['in_progress']:
         if respond: await interaction.followup.send(f"'***{tournament_title}***' is not open for registration.", ephemeral=True)
         return False 
     # Fetch tournament channel
@@ -68,7 +69,8 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, to
     if not tournament_channel:
         return False
     # Fetch tournament thread
-    tournament_thread = tournament_thread or guild.get_thread(db_tournament['id'])
+    if not tournament_thread:
+        tournament_thread = guild.get_thread(db_tournament['id'])
     if not tournament_thread:
         if respond: await interaction.followup.send(f"Failed to find tournament thread.", ephemeral=True)
         return False
@@ -128,15 +130,17 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
     user: Member = member or interaction.user
     db_guild = await _guild.find_add_guild(guild)
     # Fetch tournament
-    db_tournament = db_tournament or _tournament.find_tournament_by_id(db_guild, message.id)
-    if not db_tournament or not db_tournament['open']:
+    if not db_tournament:
+        db_tournament = _tournament.find_tournament_by_id(db_guild, message.id)
+    if not db_tournament or not db_tournament['open'] or db_tournament['in_progress']:
         return False 
     # Fetch tournament channel
     tournament_channel = await _tournament.valid_tournament_channel(db_tournament, interaction, respond)
     if not tournament_channel:
         return False
     # Fetch tournament thread
-    tournament_thread = tournament_thread or guild.get_thread(db_tournament['id'])
+    if not tournament_thread:
+        tournament_thread = guild.get_thread(db_tournament['id'])
     if not tournament_thread:
         if respond: await interaction.followup.send(f"Failed to find tournament thread.", ephemeral=True)
         return False
@@ -272,8 +276,8 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
     db_participant = await validate_participant(interaction, db_tournament, participant)
     if not db_participant:
         return False
-    # If tournament is still in registration phase, just remove from tournament
-    if db_tournament['open']:
+    # If tournament still has not started, just remove from tournament
+    if not db_tournament['in_progress']:
         participant: Member = await interaction.guild.fetch_member(db_participant['id'])
         await remove_participant(interaction, db_tournament, participant, respond=False)
         await interaction.followup.send(f"Successfully removed participant from '***{tournament_title}***'.", ephemeral=True)
@@ -386,7 +390,11 @@ async def validate_arguments_seeding(interaction: Interaction, db_guild: dict, t
     db_tournament, tournament_title, tournament_thread, tournament_channel = await _tournament.validate_arguments_tournament(
         interaction, db_guild, tournament_title)
     # Check if tournament has already been started.
-    if not db_tournament['open'] or db_tournament['completed']:
-        await interaction.followup.send(f"Seeding may only be updated during the registration phase.", ephemeral=True)
+        # Only allow updating if the tournament has not been started or completed
+    if db_tournament['in_progress']:
+        await interaction.followup.send(f"This tournament has been started; Unable to update seeding.", ephemeral=True)
         raise ValueError("Tournament has already been started.")
+    if db_tournament['completed']:
+        await interaction.followup.send(f"This tournament has been completed; Unable to update seeding.", ephemeral=True)
+        raise ValueError("Tournament has already been completed.")
     return db_tournament, tournament_title, tournament_thread, tournament_channel

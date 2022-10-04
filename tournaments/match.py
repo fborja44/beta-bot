@@ -66,8 +66,8 @@ async def create_match(tournament_thread: Thread, db_guild: dict, db_tournament:
     # Send embed message
     embed = create_match_embed(db_tournament, new_match)
     button_view = voting_buttons_view()
-    player1_button = voting_button(emoji='1️⃣', label=player1['name'], style=discord.ButtonStyle.grey)
-    player2_button = voting_button(emoji='2️⃣', label=player2['name'], style=discord.ButtonStyle.grey)
+    player1_button = voting_button(emoji='1️⃣', label=player1['name'])
+    player2_button = voting_button(emoji='2️⃣', label=player2['name'])
     button_view.add_item(player1_button)
     button_view.add_item(player2_button)
     match_message = await tournament_thread.send(f'<@{player1_id}> vs <@{player2_id}>', embed=embed, view=button_view)
@@ -494,6 +494,9 @@ class voting_buttons_view(discord.ui.View):
         super().__init__(timeout=None)
 
 class voting_button(discord.ui.Button):
+    def __init__(self) -> None:
+        super().__init__(style=discord.ButtonStyle.grey)
+    
     async def callback(self: Button, interaction: Interaction):
         """
         Callback method for voting buttons.
