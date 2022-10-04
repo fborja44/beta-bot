@@ -83,7 +83,7 @@ async def create_match(tournament_thread: Thread, db_guild: dict, db_tournament:
             return None
     return new_match
 
-async def delete_match(tournament_thread: Thread, db_tournament: dict, match_id: int):
+async def delete_match(tournament_thread: Thread, db_guild: dict, db_tournament: dict, match_id: int):
     """
     Deletes a match, and recursively deletes all dependent matches.
     """
@@ -94,28 +94,28 @@ async def delete_match(tournament_thread: Thread, db_tournament: dict, match_id:
     try:
         db_match = find_match(db_tournament, match_id)
     except:
-        print("Something went wrong when checking database for match ['id'={match_id}].")
+        print("Something went wrong when checking database for match ['id'='{match_id}'].")
     if db_match:
         # Recursively delete matches that come after this one
         for next_match_id in db_match['next_matches']:
-            db_tournament = await delete_match(tournament_thread, db_tournament, next_match_id)
+            db_guild, db_tournament = await delete_match(tournament_thread, db_guild, db_tournament, next_match_id)
         # Delete from matches
         try:
             db_guild, db_tournament = await _tournament.remove_from_tournament(guild_id, tournament_title, MATCHES, match_id)
             print(f"Deleted match ['id'='{db_match['id']}'] from tournament ['name'='{tournament_title}'].")
         except:
             print(f"Failed to delete match [id='{match_id}'] from database for tournament ['name'='{tournament_title}'].")
-            return None, None
-    # Delete match message
-    try:
-        match_message = await tournament_thread.fetch_message(db_match['id'])
-        await match_message.delete() # delete message from channel
-    except NotFound:
-        printlog(f"Failed to delete message for match [id='{match_id}']; Not found.")
-    except discord.Forbidden:
-        printlog(f"Failed to delete message for match [id='{match_id}']; Bot does not have proper permissions.")
-        return None, None
-    return db_guild, db_tournament
+            return (None, None)
+        # Delete match message
+        try:
+            match_message = await tournament_thread.fetch_message(db_match['id'])
+            await match_message.delete() # delete message from channel
+        except NotFound:
+            printlog(f"Failed to delete message for match [id='{match_id}']; Not found.")
+        except discord.Forbidden:
+            printlog(f"Failed to delete message for match [id='{match_id}']; Bot does not have proper permissions.")
+            return (None, None)
+    return (db_guild, db_tournament)
 
 async def vote_match_button(interaction: Interaction, button: Button):
     """
@@ -304,7 +304,6 @@ async def report_match(match_message: Message, db_guild: dict, db_tournament: di
     # Check if was last match in the tournament
     if count == 0 and db_match['round'] == db_tournament['num_rounds']:
         await match_message.channel.send(f"'***{db_tournament['title']}***' has been completed! Use `/t finalize {db_tournament['title']}` to finalize the results!")
-        return True
     # Update tournament embed
     try:
         tournament_channel = await match_message.guild.fetch_channel(db_tournament['channel_id'])
@@ -387,7 +386,7 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
     next_matches = db_match['next_matches']
     if len(next_matches) > 0:
         for next_match_id in next_matches:
-            db_guild, db_tournament = await delete_match(tournament_thread, db_tournament, next_match_id)
+            db_guild, db_tournament = await delete_match(tournament_thread, db_guild, db_tournament, next_match_id)
     # Report match
     match_message = await channel.fetch_message(db_match['id'])
     try:
@@ -466,7 +465,7 @@ async def reset_match(interaction: Interaction, match_challonge_id: int):
         await interaction.followup.send("Failed to reset match on Challonge.")
         return False
     # Delete match (and others that come out of it)
-    db_guild, db_tournament = await delete_match(tournament_thread, db_tournament, db_match['id'])
+    db_guild, db_tournament = await delete_match(tournament_thread, db_guild, db_tournament, db_match['id'])
     # Recreate match
     await create_match(tournament_thread, db_guild, db_tournament, ch_match)
     printlog(f"User '{user.name}#{user.discriminator}' reset match ['id'='{db_match['id']}'] in tournament '{tournament_title}'.")

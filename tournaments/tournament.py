@@ -446,7 +446,7 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
         await interaction.followup.send(f"Cannot reset a finalized tournament.", ephemeral=True)
         return False
     # Delete every match message and document associated with the tournament
-    await delete_all_matches(tournament_thread, db_tournament)
+    await delete_all_matches(tournament_thread, db_guild, db_tournament)
     # Set all participants back to active
     for i in range(len(db_tournament['participants'])):
         if not db_tournament['participants'][i]['active']:
@@ -696,20 +696,19 @@ async def remove_from_tournament(guild_id: int, tournament_title: str, target_fi
         GUILDS)
     return updated_guild, find_tournament(updated_guild, tournament_title)
 
-async def delete_all_matches(channel: TextChannel, db_tournament: dict):
+async def delete_all_matches(tournament_thread: Thread, db_guild: dict, db_tournament: dict):
     """
     Deletes all matches in the specified tournament.
     """
     tournament_title = db_tournament['title']
-    retval = True
     for match in db_tournament['matches']:
         match_id = match['id']
         try:
-            await _match.delete_match(channel, db_tournament, match_id)
-        except:
-            print(f"Failed to delete match ['id'={match_id}] while deleting tournament ['title'={tournament_title}].")
-            retval = False
-    return retval
+            db_guild, db_tournament = await _match.delete_match(tournament_thread, db_guild, db_tournament, match_id)
+        except Exception as e:
+            printlog(f"Failed to delete match ['id'={match_id}] in tournament ['title'='{tournament_title}'].", e)
+            return (None, None)
+    return (db_guild, db_tournament)
 
 def parse_time(string: str):
     """
