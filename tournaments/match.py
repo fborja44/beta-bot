@@ -3,8 +3,8 @@ from discord import Button, Embed, Guild, Interaction, Member, Message, TextChan
 from guilds import guild as _guild
 from pprint import pprint
 from tournaments import challenge as _challenge, participant as _participant, tournament as _tournament
-from utils.color import BLACK, GREEN, RED
-from utils.common import MATCHES, ICON
+from utils.color import BLACK, GREEN, RED, WOOP_PURPLE
+from utils.common import MATCHES, ICON, full_command
 from utils.logger import printlog
 import challonge
 import discord
@@ -395,7 +395,8 @@ async def override_match_result(interaction: Interaction, match_challonge_id: in
         printlog(f"Failed to report match ['id'='{db_match['id']}']", e)
         return False
     printlog(f"User ['name'='{user.name}#{user.discriminator}'] overwrote result for match ['id'='{db_match['id']}']. Winner: {db_winner['name']} {winner_emote}.")
-    await interaction.followup.send(content=f"Match report successful. Winner: {db_winner['name']} {winner_emote}")
+    await tournament_thread.send(embed=create_report_embed(interaction, db_match, db_winner))
+    await interaction.followup.send(content=f"Match report successful. Winner: {db_winner['name']} {winner_emote}", ephemeral=True)
     return True
 
 async def repair_match(interaction: Interaction, tournament_title: str=""):
@@ -430,12 +431,12 @@ async def repair_match(interaction: Interaction, tournament_title: str=""):
             await set_match(guild.id, db_tournament, new_match)
             print(f"Repaired match ['id'='{db_match['id']}'].")
             count += 1
-    await interaction.followup.send(f"Successfully repaired {count} matches.")
+    await tournament_thread.send(embed=create_repair_embed(interaction, count))
+    await interaction.followup.send(f"Successfully repaired {count} matches.", ephemeral=True)
     return True
 
 async def reset_match(interaction: Interaction, match_challonge_id: int):
     """
-    TODO: Test
     Resets a match and recalls the message.
     """
     guild: Guild = interaction.guild
@@ -469,6 +470,7 @@ async def reset_match(interaction: Interaction, match_challonge_id: int):
     # Recreate match
     await create_match(tournament_thread, db_guild, db_tournament, ch_match)
     printlog(f"User '{user.name}#{user.discriminator}' reset match ['id'='{db_match['id']}'] in tournament '{tournament_title}'.")
+    await tournament_thread.send(embed=create_reset_embed(interaction, db_match))
     # Update tournament embed
     try:
         tournament_channel = await tournament_thread.guild.fetch_channel(db_tournament['channel_id'])
@@ -480,7 +482,7 @@ async def reset_match(interaction: Interaction, match_challonge_id: int):
         await tournament_message.edit(embed=updated_tournament_embed)
     except Exception as e:
         printlog(f"Failed to create image for tournament ['title'='{tournament_title}'].", e)
-    await interaction.followup.send(f"Match has been successfully reset.")
+    await interaction.followup.send(f"Match has been successfully reset.", ephemeral=True)
     return True
     
 ##################
@@ -663,6 +665,30 @@ def edit_match_embed_confirmed(embed: Embed, match_id: int, player1: dict, playe
         embed.remove_field(2)
     embed.set_footer(text=f"Result finalized. To change result, contact a tournament manager.\nmatch_id: {match_id}")
     embed.color = BLACK
+    return embed
+
+def create_repair_embed(interaction: Interaction, num_matches: int): 
+    user = interaction.user
+    embed = Embed(title=f'👨‍⚕️ Match Medic! Fixed {num_matches} matches.', color=WOOP_PURPLE)
+    embed.set_footer(text=f'{user.name}#{user.discriminator} used {full_command(interaction.command)}')
+    return embed
+
+def create_reset_embed(interaction: Interaction, db_match: dict): 
+    match_id = db_match['id']
+    user = interaction.user
+    embed = Embed(title=f'Match {match_id} has been reset.', color=WOOP_PURPLE)
+    embed.set_footer(text=f'{user.name}#{user.discriminator} used {full_command(interaction.command)}')
+    return embed
+
+def create_report_embed(interaction: Interaction, db_match: dict, db_winner: dict): 
+    match_id = db_match['id']
+    winner_id = db_winner['id']
+    winner_emote = db_match['winner_emote']
+    user = interaction.user
+    embed = Embed(title=f'Match was overwritten.', color=WOOP_PURPLE)
+    embed.add_field(name="Match ID", value=str(match_id))
+    embed.add_field(name="Reported Winner", value=f"{winner_emote} <@{winner_id}>")
+    embed.set_footer(text=f'{user.name}#{user.discriminator} used {full_command(interaction.command)}')
     return embed
 
 def get_round_name(db_tournament: dict, match_id: int, round: int):

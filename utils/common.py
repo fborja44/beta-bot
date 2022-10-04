@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from discord import PartialMessageable
+from discord import PartialMessageable, app_commands
 import os
 
 # common.py
@@ -27,3 +27,12 @@ def is_thread(channel: PartialMessageable):
     Returns True if the channel provided is a thread, False otherwise.
     """
     return 'thread' in str(channel.type)
+
+def full_command(command: app_commands.Command):
+    """
+    Returns the full string representation of a command, including parent commands.
+    """
+    if command.parent:
+        return f"/{command.parent.name} {command.name}"
+    else:
+        return f"/{command.name}"

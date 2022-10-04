@@ -8,7 +8,7 @@ from traceback import print_exception
 from tournaments import match as _match, participant as _participant
 from guilds import channel as _channel, guild as _guild
 from utils.color import GOLD, WOOP_PURPLE
-from utils.common import TOURNAMENTS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS
+from utils.common import TOURNAMENTS, GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL, MAX_ENTRANTS, full_command
 from utils.logger import printlog
 from utils import mdb
 import challonge
@@ -410,7 +410,7 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     await set_tournament(guild.id, tournament_title, db_tournament)
     print(f"User ['name'='{user.name}#{user.discriminator}'] started tournament ['title'='{tournament_title}'].")
     # Send start message
-    await tournament_thread.send(content=f"'***{tournament_title}***' has now started!")
+    await tournament_thread.send(embed=create_start_embed(interaction, db_tournament))
     # Get each initial open matches
     matches = list(filter(lambda match: (match['state'] == 'open'), challonge_matches))
     for match in matches:
@@ -470,8 +470,8 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
     else:
         tournament_message = await tournament_channel.fetch_message(db_tournament['id']) # CANNOT FETCH INITIAL MESSAGE IN THREAD
         await tournament_message.edit(embed=new_tournament_embed, view=registration_buttons_view())
-    if interaction.channel.id != tournament_thread.id:
-        await tournament_thread.send(f"This tournament has been reset by <@{user.id}>.")
+    # if interaction.channel.id != tournament_thread.id:
+    await tournament_thread.send(embed=create_reset_embed(interaction, db_tournament))
     await interaction.followup.send(f"Successfully reset tournament '***{tournament_title}***'.", ephemeral=True)
     return True
 
@@ -513,10 +513,11 @@ async def finalize_tournament(interaction: Interaction, tournament_title: str):
         db_participants[p_index].update({'placement': ch_participant['final_rank']})
     db_tournament['participants'] = db_participants
     # await set_tournament(guild.id, tournament_title, db_tournament)
+    # await tournament_thread.send(embed=create_finalize_embed(interaction, db_tournament))
     # Create results message
     db_tournament['completed'] = completed_time # update completed time
-    embed = create_results_embed(db_tournament)
-    result_message = await tournament_thread.send(content=f"'***{tournament_title}***' has been finalized. Here are the results!", embed=embed) # Reply to original tournament message
+    results_embed = create_results_embed(db_tournament)
+    result_message = await tournament_thread.send(embed=results_embed)
     # Set tournament to completed in database
     try: 
         db_tournament.update({'result_url': result_message.jump_url}) # update result jump url
@@ -939,10 +940,34 @@ def create_info_embed(db_tournament: dict):
     embed.set_footer(text="Visit the tournament thread to view more details and join.")
     return embed
 
+def create_start_embed(interaction: Interaction, db_tournament: dict): 
+    tournament_title = db_tournament['title']
+    user = interaction.user
+    embed = Embed(title=f'🚦 {tournament_title} has been started!', color=WOOP_PURPLE)
+    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
+    if str(interaction.type) == 'application_command':
+        embed.set_footer(text=f'{user.name}#{user.discriminator} used {full_command(interaction.command)}')
+    else:
+        embed.set_footer(text=f'{user.name}#{user.discriminator} started the bracket.')
+    return embed
+
+def create_reset_embed(interaction: Interaction, db_tournament: dict): 
+    tournament_title = db_tournament['title']
+    user = interaction.user
+    embed = Embed(title=f'{tournament_title} has been reset.', color=WOOP_PURPLE)
+    embed.set_footer(text=f'{user.name}#{user.discriminator} used {full_command(interaction.command)}')
+    return embed
+
+def create_finalize_embed(interaction: Interaction, db_tournament: dict): 
+    tournament_title = db_tournament['title']
+    user = interaction.user
+    embed = Embed(title=f'🏁 {tournament_title} have been finalized.', color=WOOP_PURPLE)
+    embed.set_footer(text=f'{user.name}#{user.discriminator} used {full_command(interaction.command)}')
+    return embed
+
 def create_help_embed(interaction: Interaction):
     embed = Embed(title=f'❔ Tournament Help', color=WOOP_PURPLE)
     embed.description = 'Tournaments must be created in designiated tournament channels. Created tournaments can only be managed by the author or server admins.'
-    embed.set_author(name="beta-bot | GitHub 🤖", url="https://github.com/fborja44/beta-bot", icon_url=ICON)
     # Create
     create_value = """Create a tournament using Discord.
                     `/t create title: GENESIS 9`
