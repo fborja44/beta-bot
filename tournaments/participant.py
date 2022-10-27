@@ -61,8 +61,8 @@ async def add_participant(interaction: Interaction, db_tournament: dict=None, to
     # Fetch tournament
     if not db_tournament:
         db_tournament = _tournament.find_tournament_by_id(db_guild, message.id)
-    if not db_tournament or not db_tournament['open'] or db_tournament['in_progress']:
-        if respond: await interaction.followup.send(f"'***{tournament_title}***' is not open for registration.", ephemeral=True)
+    if not db_tournament or not db_tournament['open'] or db_tournament['in_progress'] or db_tournament['completed']:
+        if respond: await interaction.followup.send(f"This tournament is not open for registration.", ephemeral=True)
         return False 
     # Fetch tournament channel
     tournament_channel = await _tournament.valid_tournament_channel(db_tournament, interaction, respond)
@@ -132,7 +132,8 @@ async def remove_participant(interaction: Interaction, db_tournament: dict=None,
     # Fetch tournament
     if not db_tournament:
         db_tournament = _tournament.find_tournament_by_id(db_guild, message.id)
-    if not db_tournament or not db_tournament['open'] or db_tournament['in_progress']:
+    if not db_tournament or not db_tournament['open'] or db_tournament['in_progress'] or db_tournament['completed']:
+        if respond: await interaction.followup.send(f"This tournament is past its registration phase.", ephemeral=True)
         return False 
     # Fetch tournament channel
     tournament_channel = await _tournament.valid_tournament_channel(db_tournament, interaction, respond)
@@ -256,13 +257,12 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
     Destroys an participant from a tournament or DQs them if the tournament has already started from a command.
     Main function.
     """
-    channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
     # Validate arguments
     try:
-        db_tournament, tournament_title, _, tournament_channel = await _tournament.validate_arguments_tournament(
+        db_tournament, tournament_title, tournament_thread, tournament_channel = await _tournament.validate_arguments_tournament(
             interaction, db_guild, tournament_title)
     except ValueError:
         return False
@@ -284,12 +284,12 @@ async def disqualify_participant_main(interaction: Interaction, user_mention: st
         print(f"User ['name'='{user.name}'] manually removed participant.")
         return True
     # Call dq helper function
-    await disqualify_participant(tournament_channel, db_guild, db_tournament, db_participant)
+    await disqualify_participant(tournament_channel, tournament_thread, db_guild, db_tournament, db_participant)
     await interaction.followup.send(f"'{db_participant['name']}' was disqualified from '***{tournament_title}***'.")
     print(f"User ['name'='{user.name}'] manually disqualified participant.")
     return True
 
-async def disqualify_participant(tournament_channel: TextChannel | Thread, db_guild: dict, db_tournament: dict, db_participant: dict):
+async def disqualify_participant(tournament_channel: TextChannel | Thread, tournament_thread: Thread, db_guild: dict, db_tournament: dict, db_participant: dict):
     """
     Function to dq an participant in the database and challonge. Updates messages.
     """
@@ -328,7 +328,7 @@ async def disqualify_participant(tournament_channel: TextChannel | Thread, db_gu
             break
     if winner_emote:
         # Report match
-        match_message = await tournament_channel.fetch_message(db_match['id'])
+        match_message = await tournament_thread.fetch_message(db_match['id'])
         await _match.report_match(match_message, db_guild, db_tournament, db_match, winner_emote, is_dq=True)
     return True
 

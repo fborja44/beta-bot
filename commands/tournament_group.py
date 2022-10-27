@@ -91,3 +91,13 @@ async def open(interaction: Interaction, title: str=""):
 async def close(interaction: Interaction, title: str=""):
     await interaction.response.defer(ephemeral=True)
     await tournament.open_close_tournament(interaction, title.strip(), open=False)
+
+@TournamentGroup.command(description="Adds a user to a tournament regardless of registration status.")
+async def add(interaction: Interaction, user_mention: str, title: str=""):
+    await interaction.response.defer(ephemeral=True)
+    # await tournament.open_close_tournament(interaction, title.strip(), open=False)
+
+@TournamentGroup.command(description="Removes a user from a tournament regardless of registration status.")
+async def remove(interaction: Interaction, user_mention: str, title: str=""):
+    await interaction.response.defer(ephemeral=True)
+    # await tournament.open_close_tournament(interaction, title.strip(), open=False)

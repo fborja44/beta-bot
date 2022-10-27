@@ -336,7 +336,7 @@ async def call_open_matches(tournament_thread: Thread, db_guild: dict, db_tourna
             return -1
         # Get match message too
         if check_match:
-            pass
+            continue
         new_match = await create_match(tournament_thread, db_guild, db_tournament, challonge_match)
         db_tournament['matches'].append(new_match)
         # Add new match message_id to dependent matches' next_matches list
@@ -494,8 +494,8 @@ class voting_buttons_view(discord.ui.View):
         super().__init__(timeout=None)
 
 class voting_button(discord.ui.Button):
-    def __init__(self) -> None:
-        super().__init__(style=discord.ButtonStyle.grey)
+    def __init__(self, emoji, label) -> None:
+        super().__init__(emoji=emoji, label=label, style=discord.ButtonStyle.grey)
     
     async def callback(self: Button, interaction: Interaction):
         """
