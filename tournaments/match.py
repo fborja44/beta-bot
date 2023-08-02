@@ -4,7 +4,8 @@ from guilds import guild as _guild
 from pprint import pprint
 from tournaments import challenge as _challenge, participant as _participant, tournament as _tournament
 from utils.color import BLACK, GREEN, RED, WOOP_PURPLE
-from utils.common import MATCHES, ICON, full_command
+from utils.common import full_command
+from utils.constants import MATCHES, ICON
 from utils.logger import printlog
 import challonge
 import discord

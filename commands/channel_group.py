@@ -3,6 +3,7 @@ import guilds.channel as channel
 from tournaments import tournament
 
 # /channel app commands
+# ! [DEPRECATED]: Tournament channels are no longer supported due to unnecessary complexity.
 
 ChannelGroup = app_commands.Group(name="ch", description="Channel configuration commands.", guild_ids=[133296587047829505, 713190806688628786], guild_only=True)
 

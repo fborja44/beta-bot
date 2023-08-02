@@ -4,7 +4,7 @@ from guilds import guild as _guild
 from pprint import pprint
 from tournaments import leaderboard as _leaderboard, match as _match
 from utils.color import GREEN, RED, WOOP_BLUE
-from utils.common import CHALLENGES, GUILDS, ICON
+from utils.constants import CHALLENGES, GUILDS, ICON
 from utils.logger import printlog
 from utils import mdb
 import discord

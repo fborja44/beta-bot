@@ -3,7 +3,7 @@ from pprint import pprint
 from guilds import guild as _guild
 from tournaments import challenge
 from utils.color import GOLD
-from utils.common import GUILDS, ICON
+from utils.constants import GUILDS, ICON
 from utils.logger import printlog
 from utils import mdb
 

@@ -1,5 +1,5 @@
 from discord import app_commands, Interaction
-from utils.common import MAX_ENTRANTS
+from utils.constants import MAX_ENTRANTS
 from tournaments import match
 
 # /tournament app commands

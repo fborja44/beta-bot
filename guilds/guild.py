@@ -43,7 +43,7 @@ async def add_guild(guild: Guild):
         "guild_id": guild.id,
         "name": guild.name,
         "config": {
-            "tournament_channels": [],          # List of ForumChannels/TextChannels (id) where users can create tournaments
+            # "tournament_channels": [],          # ! [DEPRECATED ] List of ForumChannels/TextChannels (id) where users can create tournaments
             "create_events": False,             # TODO: Option to create server events with tournaments
             "disable_tournaments": False,       # TODO: Disables user created tournament commands
             "disable_challenges": False,        # TODO: Disables challenges

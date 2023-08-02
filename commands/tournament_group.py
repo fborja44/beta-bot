@@ -1,5 +1,5 @@
 from discord import app_commands, Interaction
-from utils.common import MAX_ENTRANTS
+from utils.constants import MAX_ENTRANTS
 from tournaments import match, participant, tournament
 
 # /tournament app commands
@@ -17,9 +17,9 @@ async def test(interaction: Interaction, num_participants: int = 4):
     await tournament.create_test_tournament(interaction, num_participants)
 
 @TournamentGroup.command(description="Creates a tournament bracket. Times in ET. Default: double elimination.")
-async def create(interaction: Interaction, title: str, time: str="", single_elim: bool = False, max_participants: int = MAX_ENTRANTS):
+async def create(interaction: Interaction, title: str, time: str="", single_elim: bool = False, max_participants: int = MAX_ENTRANTS, as_thread: bool = False):
     await interaction.response.defer(ephemeral=True)
-    await tournament.create_tournament(interaction, title.strip(), time.strip(), single_elim, max_participants)
+    await tournament.create_tournament(interaction, title.strip(), time.strip(), single_elim, max_participants, as_thread)
 
 @TournamentGroup.command(description="Join a tournament bracket.")
 async def join(interaction: Interaction):
