@@ -9,8 +9,18 @@ import challonge
 import discord
 import pytz
 import requests
-from discord import (Client, Embed, ForumChannel, Guild, Interaction, Member,
-                     Message, TextChannel, Thread)
+from discord import (
+    Client,
+    Embed,
+    ForumChannel,
+    Guild,
+    Interaction,
+    Member,
+    Message,
+    TextChannel,
+    Thread,
+)
+
 # from discord.ext import tasks
 from dotenv import load_dotenv
 
@@ -21,11 +31,19 @@ from tournaments import participant as _participant
 from db import mdb
 from utils.color import GOLD, WOOP_PURPLE
 from utils.common import full_command
-from utils.constants import (GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL,
-                             MAX_ENTRANTS, TOURNAMENTS)
+from utils.constants import (
+    GUILDS,
+    ICON,
+    IMGUR_CLIENT_ID,
+    IMGUR_URL,
+    MAX_ENTRANTS,
+    TOURNAMENTS,
+)
 from utils.log import printlog
 
-from cairosvg import svg2png  # SVG to PNG
+from cairosvg import svg2png
+
+from views.registration_view import RegistrationView  # SVG to PNG
 
 # tournament.py
 # User created tournaments
@@ -94,12 +112,17 @@ def find_most_recent_tournament(db_guild: dict, completed: bool):
 
     if completed:
         return max(
-            (t for t in guild_tournaments if t["completed"]), key=lambda t: t["completed"], default=None
+            (t for t in guild_tournaments if t["completed"]),
+            key=lambda t: t["completed"],
+            default=None,
         )
     else:
         return max(
-            (t for t in guild_tournaments if not t["completed"]), key=lambda t: t["created_at"], default=None
+            (t for t in guild_tournaments if not t["completed"]),
+            key=lambda t: t["created_at"],
+            default=None,
         )
+
 
 def find_incomplete_tournaments(db_guild: dict):
     """
@@ -114,7 +137,8 @@ def find_incomplete_tournaments(db_guild: dict):
     except Exception as e:
         print(e)
         return None
-    
+
+
 def find_registration_tournaments(db_guild: dict):
     """
     Returns all tournaments that are in the registration phase
@@ -122,12 +146,17 @@ def find_registration_tournaments(db_guild: dict):
     guild_tournaments = db_guild["tournaments"]
     try:
         guild_tournaments = list(
-            filter(lambda tournament: not tournament["completed"] and not tournament["in_progress"], guild_tournaments)
+            filter(
+                lambda tournament: not tournament["completed"]
+                and not tournament["in_progress"],
+                guild_tournaments,
+            )
         )
         return guild_tournaments
     except Exception as e:
         print(e)
         return None
+
 
 async def create_tournament(
     interaction: Interaction,
@@ -141,18 +170,19 @@ async def create_tournament(
     Creates a new tournament and adds it to the guild.
     """
     guild: Guild = interaction.guild
-    
+
     # Check if in invalid channel type or thread
     if "thread" in str(interaction.channel.type):
-        await interaction.followup.send("Invalid tournament channel. Cannot create a tournament inside of a thread.", ephemeral=True)
+        await interaction.followup.send(
+            "Invalid tournament channel. Cannot create a tournament inside of a thread.",
+            ephemeral=True,
+        )
         return False
-    
-    channel: ForumChannel | TextChannel = (
-        interaction.channel
-    )
+
+    channel: ForumChannel | TextChannel = interaction.channel
     user: Member = interaction.user
     db_guild = await _guild.find_add_guild(guild)
-    
+
     # Check if bot has thread permissions
     bot_user = guild.get_member(interaction.client.user.id)
     bot_permissions = channel.permissions_for(bot_user)
@@ -247,7 +277,7 @@ async def create_tournament(
         }
 
         embed = create_tournament_embed(new_tournament, interaction.user)
-        
+
         # Send tournament thread message
         thread_title = (
             f"🥊 {tournament_title} - {tournament_challonge['tournament_type'].title()}"
@@ -258,7 +288,7 @@ async def create_tournament(
                 name=thread_title,
                 content=thread_content,
                 embed=embed,
-                view=registration_buttons_view(),
+                view=RegistrationView(),
             )
         else:  # Creating as a text channel thread
             tournament_message = await channel.send(embed=embed)
@@ -266,13 +296,13 @@ async def create_tournament(
                 name=thread_title, message=tournament_message
             )
             await tournament_thread.starter_message.edit(
-                view=registration_buttons_view()
+                view=RegistrationView()
             )
-        
+
         # Update tournament object
         new_tournament["id"] = tournament_message.id
         new_tournament["jump_url"] = tournament_message.jump_url
-       
+
         # Add tournament to database
         result = await _guild.push_to_guild(guild, TOURNAMENTS, new_tournament)
         print(
@@ -596,7 +626,9 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     matches = list(filter(lambda match: (match["state"] == "open"), challonge_matches))
     for match in matches:
         try:
-            await _match.create_match(interaction.client, tournament_thread, db_guild, db_tournament, match)
+            await _match.create_match(
+                interaction.client, tournament_thread, db_guild, db_tournament, match
+            )
         except Exception as e:
             printlog(
                 f"Failed to add match ['match_id'='{match['id']}'] to tournament ['title'='{tournament_title}']",
@@ -675,14 +707,14 @@ async def reset_tournament(interaction: Interaction, tournament_title: str):
         await tournament_message.edit(
             content="Open for Registration 🚨",
             embed=new_tournament_embed,
-            view=registration_buttons_view(),
+            view=RegistrationView(),
         )
     else:
         tournament_message = await tournament_channel.fetch_message(
             db_tournament["id"]
         )  # CANNOT FETCH INITIAL MESSAGE IN THREAD
         await tournament_message.edit(
-            embed=new_tournament_embed, view=registration_buttons_view()
+            embed=new_tournament_embed, view=RegistrationView()
         )
     # if interaction.channel.id != tournament_thread.id:
     await tournament_thread.send(embed=create_reset_embed(interaction, db_tournament))
@@ -862,52 +894,6 @@ async def open_close_tournament(
     return True
 
 
-##################
-## BUTTON VIEWS ##
-##################
-
-
-class registration_buttons_view(discord.ui.View):
-    def __init__(self) -> None:
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="Join", style=discord.ButtonStyle.green, custom_id="join_tournament"
-    )
-    async def join(
-        self: discord.ui.View,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ):
-        await interaction.response.defer(ephemeral=True)
-        await _participant.add_participant(interaction)
-
-    @discord.ui.button(
-        label="Leave", style=discord.ButtonStyle.red, custom_id="leave_tournament"
-    )
-    async def leave(
-        self: discord.ui.View,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ):
-        await interaction.response.defer(ephemeral=True)
-        await _participant.remove_participant(interaction)
-
-    @discord.ui.button(
-        label="Start", style=discord.ButtonStyle.blurple, custom_id="start_tournament"
-    )
-    async def start(
-        self: discord.ui.View,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ):
-        await interaction.response.defer()
-        db_guild = await _guild.find_guild(interaction.guild.id)
-        db_tournament = find_tournament_by_id(db_guild, interaction.message.id)
-        tournament_title = db_tournament["title"]
-        await start_tournament(interaction, tournament_title)
-
-
 ######################
 ## HELPER FUNCTIONS ##
 ######################
@@ -932,10 +918,10 @@ async def validate_arguments_tournament(
     )
     if not db_tournament:
         raise ValueError(f"Invalid tournament title. title='{tournament_title}'")
-    
+
     # Get tournament channel
     tournament_channel = guild.get_channel(db_tournament["channel_id"])
-    
+
     # Only allow author or guild admins to delete tournament
     if (
         admin
@@ -1240,7 +1226,7 @@ async def edit_tournament_message(
     if db_tournament["in_progress"]:
         await tournament_message.edit(view=None)
     else:
-        await tournament_message.edit(view=registration_buttons_view())
+        await tournament_message.edit(view=RegistrationView())
     embed.description = f"Status: {status}"
     # Add bracket image.
     if db_tournament["in_progress"]:
@@ -1263,7 +1249,9 @@ async def edit_tournament_message(
             "%A, %B %d, %Y %#I:%M %p %Z"
         )  # time w/o ms
         embed.add_field(
-            name=f"Completed At", value=f"{time_str}\nUse `/bracket results`", inline=False
+            name=f"Completed At",
+            value=f"{time_str}\nUse `/bracket results`",
+            inline=False,
         )
     content = status if tournament_channel.type == "forum" else ""
     await tournament_message.edit(content=content, embed=embed)
@@ -1456,7 +1444,7 @@ def create_finalize_embed(interaction: Interaction, db_tournament: dict):
 
 
 def create_help_embed(interaction: Interaction):
-    embed = Embed(title=f"❔ Tournament Help", color=WOOP_PURPLE)
+    embed = Embed(title=f"📖 Tournament Help", color=WOOP_PURPLE)
     embed.description = "Tournaments can be created in any regular text channel. Tournaments cannot be created in threads or forum channels.\nTournaments can only be managed by the author or server admins."
     # Create
     create_value = """Create a tournament using Discord.
@@ -1542,15 +1530,7 @@ def create_help_embed(interaction: Interaction):
     embed.add_field(name="/match medic", value=report_value, inline=False)
     # Footer
     embed.set_footer(text=f"For more detailed docs, see the README on GitHub.")
-    # GitHub Button
-    view = discord.ui.View(timeout=None)
-    github_button = discord.ui.Button(
-        label="GitHub",
-        url="https://github.com/fborja44/beta-bot",
-        style=discord.ButtonStyle.grey,
-    )
-    view.add_item(github_button)
-    return (embed, view)
+    return embed
 
 
 #######################

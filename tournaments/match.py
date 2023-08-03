@@ -26,7 +26,7 @@ from utils.color import BLACK, GREEN, RED, WOOP_PURPLE
 from utils.common import full_command
 from utils.constants import ICON, MATCHES
 from utils.log import printlog
-from views.voting_buttons import create_voting_view
+from views.voting_view import VotingView
 
 # match.py
 # Tournament matches
@@ -86,7 +86,7 @@ async def create_match(
     }
 
     # Generate interactive buttons view
-    button_view = create_voting_view(new_match, player1, player2)
+    button_view = VotingView(new_match, player1, player2)
 
     # Send embed message
     embed = create_match_embed(db_tournament, new_match)

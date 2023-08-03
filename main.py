@@ -20,7 +20,8 @@ from utils.constants import (
     MAX_ENTRANTS,
     MONGO_ADDR,
 )
-from views.voting_buttons import create_voting_view
+from views.registration_view import RegistrationView
+from views.voting_view import VotingView
 
 # main.py
 # beta-bot tournament bot
@@ -81,18 +82,20 @@ class MyBot(discord.Client):
             # Find all incomplete tournaments not in progress
             reg_tournaments = _tournament.find_registration_tournaments(db_guild)
             for tournament in reg_tournaments:
-                self.add_view(
-                    _tournament.registration_buttons_view(), message_id=tournament["id"]
-                )
+                self.add_view(RegistrationView(), message_id=tournament["id"])
 
             # Find all in-progress tournaments
             active_tournament = _tournament.find_active_tournament(db_guild)
             if active_tournament:
                 for match in active_tournament["matches"]:
                     if not match["completed"]:
-                        player1 = _participant.find_participant(active_tournament, match["player1"]["id"])
-                        player2 = _participant.find_participant(active_tournament, match["player2"]["id"])
-                        voting_buttons_view = create_voting_view(match, player1, player2)
+                        player1 = _participant.find_participant(
+                            active_tournament, match["player1"]["id"]
+                        )
+                        player2 = _participant.find_participant(
+                            active_tournament, match["player2"]["id"]
+                        )
+                        voting_buttons_view = VotingView(match, player1, player2)
                         self.add_view(voting_buttons_view, message_id=match["id"])
 
         # self.add_view(challenge.accept_view())
