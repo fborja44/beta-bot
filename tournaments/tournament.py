@@ -1263,7 +1263,7 @@ async def edit_tournament_message(
             "%A, %B %d, %Y %#I:%M %p %Z"
         )  # time w/o ms
         embed.add_field(
-            name=f"Completed At", value=f"{time_str}\nUse `/t results`", inline=False
+            name=f"Completed At", value=f"{time_str}\nUse `/bracket results`", inline=False
         )
     content = status if tournament_channel.type == "forum" else ""
     await tournament_message.edit(content=content, embed=embed)
@@ -1345,7 +1345,7 @@ def create_seeding_embed(db_tournament: dict):
         embed.description += f"> **{db_participant['seed']}.** {mention}\n"
     # Other info fields
     embed.add_field(name=f"Bracket Link", value=challonge_url, inline=False)
-    # embed.set_footer(text=f'To update seeding, use `/t seed`')
+    # embed.set_footer(text=f'To update seeding, use `/bracket seed`')
     return embed
 
 
@@ -1457,73 +1457,73 @@ def create_finalize_embed(interaction: Interaction, db_tournament: dict):
 
 def create_help_embed(interaction: Interaction):
     embed = Embed(title=f"❔ Tournament Help", color=WOOP_PURPLE)
-    embed.description = "Tournaments must be created in designiated tournament channels. Created tournaments can only be managed by the author or server admins."
+    embed.description = "Tournaments can be created in any regular text channel. Tournaments cannot be created in threads or forum channels.\nTournaments can only be managed by the author or server admins."
     # Create
     create_value = """Create a tournament using Discord.
-                    `/t create title: GENESIS 9`
-                    `/t create title: The Big House 10 time: 10:00 PM`
-                    `/t create title: Low Tier City single_elim: True max_participants: 12`"""
-    embed.add_field(name="/t create", value=create_value, inline=False)
+                    `/bracket create title: GENESIS 9`
+                    `/bracket create title: The Big House 10 time: 10:00 PM`
+                    `/bracket create title: Low Tier City single_elim: True max_participants: 12`"""
+    embed.add_field(name="/bracket create", value=create_value, inline=False)
     # Join
     join_value = """Join a tournament in registration phase.
-                    `/t join`
-                    `/t join title: GENESIS 9`"""
-    embed.add_field(name="/t join", value=join_value, inline=False)
+                    `/bracket join`
+                    `/bracket join title: GENESIS 9`"""
+    embed.add_field(name="/bracket join", value=join_value, inline=False)
     # Leave
     leave_value = """Leave a tournament in registration phase.
-                    `/t leave`
-                    `/t leave title: GENESIS 9`"""
-    embed.add_field(name="/t leave", value=leave_value, inline=False)
+                    `/bracket leave`
+                    `/bracket leave title: GENESIS 9`"""
+    embed.add_field(name="/bracket leave", value=leave_value, inline=False)
     # Seeding
     seeding_value = """Displays the seeding for a tournament.
-                    `/t seeding`
-                    `/t seeding title: GENESIS 9`"""
-    embed.add_field(name="/t seeding", value=seeding_value, inline=False)
+                    `/bracket seeding`
+                    `/bracket seeding title: GENESIS 9`"""
+    embed.add_field(name="/bracket seeding", value=seeding_value, inline=False)
     # Set Seed
     set_seed_value = f"""Sets the seed for a participant in a tournament.
-                    `/t seed user_mention: `<@{interaction.client.user.id}> `seed: 1`
-                    `/t seed user_mention: `<@{interaction.client.user.id}> `seed: 1 title: GENESIS 9`"""
-    embed.add_field(name="/t seed", value=set_seed_value, inline=False)
+                    `/bracket seed user_mention: `<@{interaction.client.user.id}> `seed: 1`
+                    `/bracket seed user_mention: `<@{interaction.client.user.id}> `seed: 1 title: GENESIS 9`"""
+    embed.add_field(name="/bracket seed", value=set_seed_value, inline=False)
     # Randomize Seeding
     randomize_value = """Randomizes the seeding for a tournament.
-                    `/t randomize`
-                    `/t randomize title: GENESIS 9`"""
-    embed.add_field(name="/t randomize", value=randomize_value, inline=False)
+                    `/bracket randomize`
+                    `/bracket randomize title: GENESIS 9`"""
+    embed.add_field(name="/bracket randomize", value=randomize_value, inline=False)
     # Delete
     delete_value = """Delete a tournament.
-                    `/t delete`
-                    `/t delete title: GENESIS 9`"""
-    embed.add_field(name="/t delete", value=delete_value, inline=False)
+                    `/bracket delete`
+                    `/bracket delete title: GENESIS 9`"""
+    embed.add_field(name="/bracket delete", value=delete_value, inline=False)
     # Update
     update_value = """Updates a tournament according to specified fields.
-                    `/t update title: GENESIS 9 new_title: GENESIS 10`
-                    `/t update title: The Big House 10 time: 9:30 PM`
-                    `/t update title: Low Tier city single_elim: False max_participants: 16`"""
-    embed.add_field(name="/t update", value=update_value, inline=False)
+                    `/bracket update title: GENESIS 9 new_title: GENESIS 10`
+                    `/bracket update title: The Big House 10 time: 9:30 PM`
+                    `/bracket update title: Low Tier city single_elim: False max_participants: 16`"""
+    embed.add_field(name="/bracket update", value=update_value, inline=False)
     # Start
     start_value = """Starts a tournament with at least 2 participants.
-                    `/t start`
-                    `/t start title: GENESIS 9`"""
-    embed.add_field(name="/t start", value=start_value, inline=False)
+                    `/bracket start`
+                    `/bracket start title: GENESIS 9`"""
+    embed.add_field(name="/bracket start", value=start_value, inline=False)
     # Reset
     reset_value = """Resets a tournament back to registration phase.
-                    `/t reset`
-                    `/t reset title: GENESIS 9`"""
-    embed.add_field(name="/t reset", value=reset_value, inline=False)
+                    `/bracket reset`
+                    `/bracket reset title: GENESIS 9`"""
+    embed.add_field(name="/bracket reset", value=reset_value, inline=False)
     # Finalize
     finalize_value = """Finalizes the results of a tournament if available.
-                    `/t finalize`
-                    `/t finalize title: GENESIS 9`"""
-    embed.add_field(name="/t finalize", value=finalize_value, inline=False)
+                    `/bracket finalize`
+                    `/bracket finalize title: GENESIS 9`"""
+    embed.add_field(name="/bracket finalize", value=finalize_value, inline=False)
     # Results
     results_value = """Displays the results of a finalized tournament if available.
-                    `/t results`
-                    `/t results title: GENESIS 9`"""
-    embed.add_field(name="/t results", value=results_value, inline=False)
+                    `/bracket results`
+                    `/bracket results title: GENESIS 9`"""
+    embed.add_field(name="/bracket results", value=results_value, inline=False)
     # Disqualify
     disqualify_value = f"""Disqualifies a user from a tournament.
-                        `/t disqualify user_mention:` <@{interaction.client.user.id}>"""
-    embed.add_field(name="/t disqualify", value=disqualify_value, inline=False)
+                        `/bracket disqualify user_mention:` <@{interaction.client.user.id}>"""
+    embed.add_field(name="/bracket disqualify", value=disqualify_value, inline=False)
     # Vote
     vote_value = f"""Vote for a winner in a tournament match.
                     `/match vote match_id: 1034908912 vote: ` <@{interaction.client.user.id}>

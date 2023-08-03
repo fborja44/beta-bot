@@ -474,10 +474,10 @@ async def report_match(
     # Check if was last match in the tournament
     if count == 0 and db_match["round"] == db_tournament["num_rounds"]:
         await match_message.channel.send(
-            f"'***{db_tournament['title']}***' has been completed! Use `/t finalize {db_tournament['title']}` to finalize the results!"
+            f"'***{db_tournament['title']}***' has been completed! Use `/bracket finalize {db_tournament['title']}` to finalize the results!"
         )
         
-    # Update tournament embed
+    # Update tournament embed image
     try:
         tournament_channel = await match_message.guild.fetch_channel(
             db_tournament["channel_id"]
@@ -493,7 +493,7 @@ async def report_match(
         updated_tournament_embed = _tournament.create_tournament_image(
             db_tournament, tournament_message.embeds[0]
         )
-        await tournament_message.edit(embed=updated_tournament_embed)
+        await tournament_message.edit(content=None, embed=updated_tournament_embed)
     except Exception as e:
         printlog(
             f"Failed to create image for tournament ['title'='{tournament_title}'].", e
@@ -966,7 +966,7 @@ def edit_match_embed_dispute(embed: Embed):
     """
     embed.add_field(
         name="🛑 Result Dispute 🛑",
-        value="Contact a tournament manager or change vote to resolve.",
+        value="Change your vote to resolve or contact a tournament manager.",
     )
     embed.color = RED
     return embed
@@ -1040,7 +1040,7 @@ def create_report_embed(interaction: Interaction, db_match: dict, db_winner: dic
     winner_id = db_winner["id"]
     winner_emote = db_match["winner_emote"]
     user = interaction.user
-    embed = Embed(title=f"Match was overwritten.", color=WOOP_PURPLE)
+    embed = Embed(title=f"Match reported.", color=WOOP_PURPLE)
     embed.add_field(name="Match ID", value=str(match_id))
     embed.add_field(name="Reported Winner", value=f"{winner_emote} <@{winner_id}>")
     embed.set_footer(
