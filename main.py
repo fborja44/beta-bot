@@ -1,4 +1,5 @@
 import logging
+import os
 
 import challonge
 import discord
@@ -7,13 +8,19 @@ from discord import Guild, app_commands
 from pymongo import MongoClient
 
 import guilds.guild as _guild
-from commands import match_group, tournament_group
+from app_commands import match_group, tournament_group
 from guilds import channel as _channel
-from tournaments import tournament
-from utils import logger
-import os
-from utils.constants import (CHALLONGE_KEY, CHALLONGE_USER, MAX_ENTRANTS,
-                             MONGO_ADDR, DISCORD_TOKEN)
+import tournaments.tournament as _tournament
+import tournaments.participant as _participant
+from utils import log
+from utils.constants import (
+    CHALLONGE_KEY,
+    CHALLONGE_USER,
+    DISCORD_TOKEN,
+    MAX_ENTRANTS,
+    MONGO_ADDR,
+)
+from views.voting_buttons import create_voting_view
 
 # main.py
 # beta-bot tournament bot
@@ -33,11 +40,14 @@ if not os.path.exists(log_dir):
 # Add logs to discord.log
 discord_logger = logging.getLogger("discord")
 discord_logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(filename="logs/discord.log", encoding="utf-8", mode="w")
-handler.setFormatter(
-    logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s")
+file_handler = logging.FileHandler(
+    filename="logs/discord.log", encoding="utf-8", mode="w"
 )
-discord_logger.addHandler(handler)
+file_handler_formatter = logging.Formatter(
+    "[{asctime}] [{levelname:<8}] {name}: {message}", "%Y-%m-%d %H:%M:%S", style="{"
+)
+file_handler.setFormatter(file_handler_formatter)
+discord_logger.addHandler(file_handler)
 
 # Connect to MongoDB
 db_client = MongoClient(MONGO_ADDR)
@@ -58,8 +68,35 @@ class MyBot(discord.Client):
     def __init__(self, *args, **kwargs):
         self.cmd_prefix = "$"  # unused
         self.synced = False  # ensures commands are only synced once
-        self.views = False  # ensures views are reset when bot is restarted
         super().__init__(*args, **kwargs)
+
+    async def setup_hook(self) -> None:
+        """
+        Register views for persistent functionality
+        """
+        # Get guild tournaments from database
+        guilds = await _guild.get_all_guilds()
+
+        for db_guild in guilds:
+            # Find all incomplete tournaments not in progress
+            reg_tournaments = _tournament.find_registration_tournaments(db_guild)
+            for tournament in reg_tournaments:
+                self.add_view(
+                    _tournament.registration_buttons_view(), message_id=tournament["id"]
+                )
+
+            # Find all in-progress tournaments
+            active_tournament = _tournament.find_active_tournament(db_guild)
+            if active_tournament:
+                for match in active_tournament["matches"]:
+                    if not match["completed"]:
+                        player1 = _participant.find_participant(active_tournament, match["player1"]["id"])
+                        player2 = _participant.find_participant(active_tournament, match["player2"]["id"])
+                        voting_buttons_view = create_voting_view(match, player1, player2)
+                        self.add_view(voting_buttons_view, message_id=match["id"])
+
+        # self.add_view(challenge.accept_view())
+        # self.add_view(challenge.voting_buttons_view())
 
     async def on_ready(self):  # Event called when bot is ready
         # Sync commands
@@ -68,19 +105,13 @@ class MyBot(discord.Client):
             await tree.sync(guild=TEST_GUILD)  # change to global when ready
             await tree.sync(guild=discord.Object(id=713190806688628786))
             self.synced = True
-        if not self.views:
-            self.add_view(tournament.registration_buttons_view())
-            # self.add_view(match.voting_buttons_view())
-            # self.add_view(challenge.accept_view())
-            # self.add_view(challenge.voting_buttons_view())
-            self.views = True
         # print(Fore.YELLOW + "Updating guilds..."+ Style.RESET_ALL)
         # for guild in self.guilds:
         #     await _guild.find_update_add_guild(self, db, guild)
         print(
             "---\n" + Fore.YELLOW + f"{bot_client.user} is now ready." + Style.RESET_ALL
         )
-        logger.printlog("SESSION START")
+        log.printlog("SESSION START")
 
     async def on_guild_join(self, guild: Guild):
         await _guild.find_update_add_guild(db, guild)

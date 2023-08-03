@@ -1,10 +1,14 @@
-from discord import Embed, Guild, ForumChannel, Interaction, Message, Member, TextChannel, Thread
-from pprint import pprint
-from tournaments import match as _match, tournament as _tournament
-from guilds import guild as _guild
-from utils.logger import printlog
-import challonge
 import re
+from pprint import pprint
+
+import challonge
+from discord import (Embed, ForumChannel, Guild, Interaction, Member, Message,
+                     TextChannel, Thread)
+
+from guilds import guild as _guild
+from tournaments import match as _match
+from tournaments import tournament as _tournament
+from utils.log import printlog
 
 # participant.py
 # Tournament participant functions
@@ -16,6 +20,12 @@ def find_participant(db_tournament: dict, participant_id):
     Returns an participant in a tournament by id.
     """
     result = [participant for participant in db_tournament['participants'] if participant['id'] == participant_id]
+    if result:
+        return result[0]
+    return None
+
+def find_participant_by_challonge_id(db_tournament: dict, challonge_id):
+    result = [participant for participant in db_tournament['participants'] if participant['challonge_id'] == challonge_id]
     if result:
         return result[0]
     return None

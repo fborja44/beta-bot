@@ -7,12 +7,12 @@ from discord import (CategoryChannel, Embed, ForumChannel, Guild, Interaction,
                      Member, Message, TextChannel, Thread)
 
 import guilds.guild as _guild
-import utils.mdb as mdb
+import db.mdb as mdb
 from tournaments import tournament as _tournament
 from utils.color import WOOP_PURPLE
 from utils.constants import ICON, TOURNAMENTS
 from utils.decorators import deprecated
-from utils.logger import printlog, printlog_msg
+from utils.log import printlog, printlog_msg
 
 # channel.py
 # Tournament discord channel

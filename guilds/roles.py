@@ -1,6 +1,9 @@
-from discord import Embed, Guild, Interaction, Message, Member, Role, TextChannel
-from utils.logger import printlog, printlog_msg
 from pprint import pprint
+
+from discord import (Embed, Guild, Interaction, Member, Message, Role,
+                     TextChannel)
+
+from utils.log import printlog, printlog_msg
 
 # roles.py
 # Tournament organizer/manager roles and others

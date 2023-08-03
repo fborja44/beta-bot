@@ -1,7 +1,9 @@
-from colorama import Fore, Back, Style
-from datetime import datetime
-from discord import TextChannel
 import traceback
+from datetime import datetime
+
+from colorama import Back, Fore, Style
+from discord import TextChannel
+
 
 def printlog(text: str, e: Exception = None):
     time = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # time w/o ms

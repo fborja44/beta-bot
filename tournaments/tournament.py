@@ -18,12 +18,12 @@ from guilds import channel as _channel
 from guilds import guild as _guild
 from tournaments import match as _match
 from tournaments import participant as _participant
-from utils import mdb
+from db import mdb
 from utils.color import GOLD, WOOP_PURPLE
 from utils.common import full_command
 from utils.constants import (GUILDS, ICON, IMGUR_CLIENT_ID, IMGUR_URL,
                              MAX_ENTRANTS, TOURNAMENTS)
-from utils.logger import printlog
+from utils.log import printlog
 
 from cairosvg import svg2png  # SVG to PNG
 
@@ -109,6 +109,20 @@ def find_incomplete_tournaments(db_guild: dict):
     try:
         guild_tournaments = list(
             filter(lambda tournament: not tournament["completed"], guild_tournaments)
+        )
+        return guild_tournaments
+    except Exception as e:
+        print(e)
+        return None
+    
+def find_registration_tournaments(db_guild: dict):
+    """
+    Returns all tournaments that are in the registration phase
+    """
+    guild_tournaments = db_guild["tournaments"]
+    try:
+        guild_tournaments = list(
+            filter(lambda tournament: not tournament["completed"] and not tournament["in_progress"], guild_tournaments)
         )
         return guild_tournaments
     except Exception as e:
@@ -582,7 +596,7 @@ async def start_tournament(interaction: Interaction, tournament_title: str):
     matches = list(filter(lambda match: (match["state"] == "open"), challonge_matches))
     for match in matches:
         try:
-            await _match.create_match(tournament_thread, db_guild, db_tournament, match)
+            await _match.create_match(interaction.client, tournament_thread, db_guild, db_tournament, match)
         except Exception as e:
             printlog(
                 f"Failed to add match ['match_id'='{match['id']}'] to tournament ['title'='{tournament_title}']",
@@ -1002,13 +1016,13 @@ async def find_valid_tournament(
             db_tournament = find_tournament_by_id(db_guild, interaction.channel_id)
             if not db_tournament:
                 await interaction.followup.send(
-                    f"Invalid channel. Either provide the `title` parameter if available or use this command in the tournament thread.",
+                    f"Invalid channel. Either provide the `title` if available or use this command in the tournament thread.",
                     ephemeral=True,
                 )
                 return (None, None, None)
         else:
             await interaction.followup.send(
-                f"Invalid channel. Either provide the `title` parameter if available or use this command in the tournament thread.",
+                f"Invalid channel. Either provide the `title` if available or use this command in the tournament thread.",
                 ephemeral=True,
             )
             return (None, None, None)
@@ -1153,7 +1167,7 @@ def str_status(db_tournament: dict):
         status = "Open for Registration! 🚨"
     else:
         if db_tournament["in_progress"]:
-            status = "Started ⚔️"
+            status = "Started ⚔️ \n\n See thread for matches."
         else:
             status = "Registration Closed 🔒"
     return status

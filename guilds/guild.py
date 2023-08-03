@@ -1,11 +1,19 @@
-from discord import Guild, Interaction
 from pprint import pprint
-import utils.mdb as mdb
+
+from discord import Guild, Interaction
+
+import db.mdb as mdb
 
 # guild.py
 # Discord guilds used by the bot
 
 GUILDS = 'guilds'
+
+async def get_all_guilds():
+    """
+    Returns all guilds in the database.
+    """
+    return await mdb.find_all(GUILDS)
 
 async def find_guild(guild_id: int):
     """

@@ -1,11 +1,14 @@
-from discord import Embed, Guild, Interaction, Member, Message, TextChannel, User
 from pprint import pprint
+
+from discord import (Embed, Guild, Interaction, Member, Message, TextChannel,
+                     User)
+
+from db import mdb
 from guilds import guild as _guild
 from tournaments import challenge
 from utils.color import GOLD
 from utils.constants import GUILDS, ICON
-from utils.logger import printlog
-from utils import mdb
+from utils.log import printlog
 
 # leaderboard.py
 # leaderboard for 1v1 challenges
