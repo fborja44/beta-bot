@@ -9,8 +9,8 @@ from discord import (Button, Embed, Guild, Interaction, Member, Message,
 
 from db import mdb
 from guilds import guild as _guild
-from tournaments import leaderboard as _leaderboard
-from tournaments import match as _match
+from modules import leaderboard as _leaderboard
+from modules import match as _match
 from utils.color import GREEN, RED, WOOP_BLUE
 from utils.constants import CHALLENGES, GUILDS, ICON
 from utils.log import printlog

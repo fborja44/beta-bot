@@ -8,7 +8,7 @@ from discord import (CategoryChannel, Embed, ForumChannel, Guild, Interaction,
 
 import guilds.guild as _guild
 import db.mdb as mdb
-from tournaments import tournament as _tournament
+from modules import tournament as _tournament
 from utils.color import WOOP_PURPLE
 from utils.constants import ICON, TOURNAMENTS
 from utils.decorators import deprecated

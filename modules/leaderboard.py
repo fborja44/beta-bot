@@ -5,7 +5,7 @@ from discord import (Embed, Guild, Interaction, Member, Message, TextChannel,
 
 from db import mdb
 from guilds import guild as _guild
-from tournaments import challenge
+from modules import challenge
 from utils.color import GOLD
 from utils.constants import GUILDS, ICON
 from utils.log import printlog

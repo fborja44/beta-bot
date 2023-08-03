@@ -1,6 +1,6 @@
 from discord import Interaction, app_commands
 
-from tournaments import match, participant, tournament
+from modules import match, participant, tournament
 from utils.constants import MAX_ENTRANTS
 from views.help_view import HelpView
 

@@ -1,6 +1,6 @@
 from discord import Interaction, app_commands
 
-from tournaments import leaderboard
+from modules import leaderboard
 
 # /leaderboard app commands
 

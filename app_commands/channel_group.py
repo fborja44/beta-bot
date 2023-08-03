@@ -1,7 +1,7 @@
 from discord import Interaction, app_commands
 
 import guilds.channel as channel
-from tournaments import tournament
+from modules import tournament
 
 # /channel app commands
 # ! [DEPRECATED]: Tournament channels are no longer supported due to unnecessary complexity.

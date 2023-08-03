@@ -6,8 +6,8 @@ from discord import (Embed, ForumChannel, Guild, Interaction, Member, Message,
                      TextChannel, Thread)
 
 from guilds import guild as _guild
-from tournaments import match as _match
-from tournaments import tournament as _tournament
+from modules import match as _match
+from modules import tournament as _tournament
 from utils.log import printlog
 
 # participant.py

@@ -1,6 +1,6 @@
 from discord import Interaction, app_commands
 
-from tournaments import challenge
+from modules import challenge
 
 # /challenge app commands
 

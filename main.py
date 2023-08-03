@@ -10,8 +10,8 @@ from pymongo import MongoClient
 import guilds.guild as _guild
 from app_commands import match_group, tournament_group
 from guilds import channel as _channel
-import tournaments.tournament as _tournament
-import tournaments.participant as _participant
+import modules.tournament as _tournament
+import modules.participant as _participant
 from utils import log
 from utils.constants import (
     CHALLONGE_KEY,
@@ -128,29 +128,16 @@ class MyBot(discord.Client):
         db_guild: dict = await _guild.find_guild(guild.id)
         if channel.id in db_guild["config"]["tournament_channels"]:
             await _channel.delete_tournament_channel_db(db_guild, channel.id)
-
+            
 
 intents = discord.Intents.default()
 intents.members = True
 bot_client = MyBot(intents=intents)
+
+# Register bot commands
 tree = app_commands.CommandTree(bot_client)
-
-# tree.add_command(channel_group.ChannelGroup, guild=TEST_GUILD)
-# tree.add_command(channel_group.ChannelGroup, guild=discord.Object(id=713190806688628786))
-
-tree.add_command(tournament_group.TournamentGroup, guild=TEST_GUILD)
-tree.add_command(
-    tournament_group.TournamentGroup, guild=discord.Object(id=713190806688628786)
-)
-
-tree.add_command(match_group.MatchGroup, guild=TEST_GUILD)
-tree.add_command(match_group.MatchGroup, guild=discord.Object(id=713190806688628786))
-
-# tree.add_command(challenge_group.ChallengeGroup, guild=TEST_GUILD)
-# tree.add_command(challenge_group.ChallengeGroup, guild=discord.Object(id=713190806688628786))
-
-# tree.add_command(leaderboard_group.LeaderboardGroup, guild=TEST_GUILD)
-# tree.add_command(leaderboard_group.LeaderboardGroup, guild=discord.Object(id=713190806688628786))
+tree.add_command(tournament_group.TournamentGroup)
+tree.add_command(match_group.MatchGroup)
 
 
 bot_client.run(DISCORD_TOKEN)

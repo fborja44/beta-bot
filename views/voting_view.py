@@ -24,7 +24,7 @@ class VotingButton(discord.ui.Button):
         """
         Callback method for voting buttons.
         """
-        from tournaments.match import vote_match_button
+        from modules.match import vote_match_button
 
         await interaction.response.defer(ephemeral=True)
         await vote_match_button(interaction, self)

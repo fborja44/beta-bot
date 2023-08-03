@@ -26,8 +26,8 @@ from dotenv import load_dotenv
 
 from guilds import channel as _channel
 from guilds import guild as _guild
-from tournaments import match as _match
-from tournaments import participant as _participant
+from modules import match as _match
+from modules import participant as _participant
 from db import mdb
 from utils.color import GOLD, WOOP_PURPLE
 from utils.common import full_command

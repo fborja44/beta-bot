@@ -19,9 +19,9 @@ from discord import (
 )
 
 from guilds import guild as _guild
-from tournaments import challenge as _challenge
-from tournaments import participant as _participant
-from tournaments import tournament as _tournament
+from modules import challenge as _challenge
+from modules import participant as _participant
+from modules import tournament as _tournament
 from utils.color import BLACK, GREEN, RED, WOOP_PURPLE
 from utils.common import full_command
 from utils.constants import ICON, MATCHES

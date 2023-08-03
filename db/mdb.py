@@ -16,7 +16,6 @@ MONGO_ADDR = os.getenv("MONGO")
 db_client = MongoClient(MONGO_ADDR)
 db = db_client["beta-bot"]
 
-
 async def find_all(collection: str, message=None, send_text=None):
     """
     Gets all documents in a single collection.

@@ -1,7 +1,7 @@
 import discord
 from guilds import guild
 
-from tournaments import participant
+from modules import participant
 
 
 class RegistrationView(discord.ui.View):
@@ -38,7 +38,7 @@ class RegistrationView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.Button
     ):
-        from tournaments.tournament import find_tournament_by_id, start_tournament
+        from modules.tournament import find_tournament_by_id, start_tournament
 
         await interaction.response.defer()
         db_guild = await guild.find_guild(interaction.guild.id)
