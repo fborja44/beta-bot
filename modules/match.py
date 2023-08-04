@@ -546,7 +546,6 @@ async def report_match(
         )
         
     # Update tournament embed image
-    # TODO: Fix image functionality
     try:
         tournament_channel = await match_message.guild.fetch_channel(
             db_tournament["channel_id"]

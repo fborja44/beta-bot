@@ -1562,8 +1562,6 @@ def create_tournament_image(db_tournament: dict, embed: Embed):
     """Creates an image of the tournament.
     Converts the generated svg challonge image to png and uploads it to imgur.
     Discord does not support svg images in preview.
-    
-    TODO: Fix image functionality
 
     Args:
         db_tournament (dict): The target tournament database document.
