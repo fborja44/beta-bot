@@ -1,6 +1,7 @@
 import os
 from pprint import pprint
 
+from discord import Message
 from dotenv import load_dotenv
 from pymongo import DESCENDING, MongoClient, ReturnDocument
 
@@ -16,23 +17,41 @@ MONGO_ADDR = os.getenv("MONGO")
 db_client = MongoClient(MONGO_ADDR)
 db = db_client["beta-bot"]
 
-async def find_all(collection: str, message=None, send_text=None):
-    """
-    Gets all documents in a single collection.
+
+async def find_all(collection: str, message: Message = None, response_text: str = None):
+    """Finds all documents from a single collection.
+
+    Args:
+        collection (str): The target database collection.
+        message (Message, optional): A discord message to respond to. Defaults to None.
+        response_text (str, optional): The response message text. Defaults to None.
+
+    Returns:
+        A list of the resulting documents if successful. Otherwise, returns None.
     """
     try:
-        document = db[collection].find({})
+        document_list = db[collection].find({})
     except Exception as e:
         printlog(f"DB_ERROR: Failed to fetch collection documents [{collection}]:", e)
         return None
-    if message and send_text:
-        await message.channel.send(send_text)
-    return document
+    if message and response_text:
+        await message.channel.send(response_text)
+    return document_list
 
 
-async def find_document(target: dict, collection: str, message=None, send_text=None):
-    """
-    Finds a single document in the specifed collection.
+async def find_document(
+    target: dict, collection: str, message: Message = None, response_text: str = None
+):
+    """Finds a single document in the specifed collection.
+
+    Args:
+        target (dict): The target document query.
+        collection (str): The target database collection.
+        message (Message, optional): A discord message to respond to. Defaults to None.
+        response_text (str, optional): The response message text. Defaults to None.
+
+    Returns:
+        The result document if successful. Otherwise, returns None.
     """
     try:
         document = db[collection].find_one(target)
@@ -42,8 +61,8 @@ async def find_document(target: dict, collection: str, message=None, send_text=N
             e,
         )
         return None
-    if message and send_text:
-        await message.channel.send(send_text)
+    if message and response_text:
+        await message.channel.send(response_text)
     return document
 
 
@@ -52,11 +71,21 @@ async def find_subdocument(
     target_field: str,
     target_value: dict,
     collection: str,
-    message=None,
-    send_text=None,
+    message: Message = None,
+    response_text: str = None,
 ):
-    """
-    Finds a single document in the specifed collection.
+    """Finds a single subdocument in the specifed collection.
+
+    Args:
+        target_array (str): The target subdocument collection name.
+        target_field (str): The target subdocument field name.
+        target_value (dict): The target subdocument value.
+        collection (str): The target collection.
+        message (Message, optional): A discord message to respond to. Defaults to None.
+        response_text (str, optional): The response message text. Defaults to None.
+
+    Returns:
+        The result document if successful. Otherwise, returns None.
     """
     try:
         document = db[collection].aggregate(
@@ -70,16 +99,24 @@ async def find_subdocument(
             e,
         )
         return None
-    if message and send_text:
-        await message.channel.send(send_text)
+    if message and response_text:
+        await message.channel.send(response_text)
     return document
 
 
 async def find_most_recent_document(
-    target: dict, collection: str, message=None, send_text=None
+    target: dict, collection: str, message: Message = None, response_text: str = None
 ):
-    """
-    Finds the most recently added document in the database.
+    """Finds the most recently added document in the database.
+
+    Args:
+        target (dict): The target document query
+        collection (str): The target database collection.
+        message (Message, optional): A discord message to respond to. Defaults to None.
+        response_text (str, optional): The response message text. Defaults to None.
+
+    Returns:
+        The result document if successful. Otherwise, returns None.
     """
     try:
         document = db[collection].find_one(target, sort=[("_id", DESCENDING)])
@@ -89,14 +126,24 @@ async def find_most_recent_document(
             e,
         )
         return None
-    if message and send_text:
-        await message.channel.send(send_text)
+    if message and response_text:
+        await message.channel.send(response_text)
     return document
 
 
-async def add_document(document: dict, collection: str, message=None, send_text=None):
-    """
-    Adds a single document to the specifed collection.
+async def add_document(
+    document: dict, collection: str, message: Message = None, response_text: str = None
+):
+    """Adds a single document to the specifed collection.
+
+    Args:
+        document (dict): The document to add to the database.
+        collection (str): The target database collection.
+        message (Message, optional): A discord message to respond to. Defaults to None.
+        response_text (str, optional): The response message text. Defaults to None.
+
+    Returns:
+        The id of the inserted document if successful. Otherwise, returns None.
     """
     try:
         inserted_id = db[collection].insert_one(document).inserted_id
@@ -105,17 +152,27 @@ async def add_document(document: dict, collection: str, message=None, send_text=
         return None
     if inserted_id:
         printlog(f"Successfully added document to [{collection}]:")
-        if message and send_text:
-            await message.channel.send(send_text)
+        if message and response_text:
+            await message.channel.send(response_text)
         return inserted_id
     else:
         printlog(f"Could not add document to [{collection}]:")
     return None
 
 
-async def delete_document(target: dict, collection: str, message=None, send_text=None):
-    """
-    Deletes a single document from the specifed collection.
+async def delete_document(
+    target: dict, collection: str, message: Message = None, response_text: str = None
+):
+    """Deletes a single document from the specifed collection.
+
+    Args:
+        target (dict): The target document to remove from the database.
+        collection (str): The target database collection.
+        message (Message, optional): A discord message to respond to. Defaults to None.
+        response_text (str, optional): The response message text. Defaults to None.
+
+    Returns:
+        The result object if successful. Otherwise, returns None.
     """
     try:
         result = db[collection].delete_one(target)
@@ -129,8 +186,8 @@ async def delete_document(target: dict, collection: str, message=None, send_text
         printlog(
             f"Successfully removed document from [{collection}]:\ntarget=[{target}]"
         )
-        if message and send_text:
-            await message.channel.send(send_text)
+        if message and response_text:
+            await message.channel.send(response_text)
         return result
     else:
         printlog(
@@ -140,10 +197,19 @@ async def delete_document(target: dict, collection: str, message=None, send_text
 
 
 async def update_single_document(
-    target: dict, update_obj: dict, collection: str, message=None, send_text=None
+    target: dict, update_obj: dict, collection: str, message: Message=None, response_text: str=None
 ):
-    """
-    Updates a single field in a document in the specifed collection.
+    """Updates a single field in a document in the specifed collection.
+
+    Args:
+        target (dict): The target database document to update
+        update_obj (dict): The updated document.
+        collection (str): The target database collection.
+        message (message, optional): A discord message to respond to. Defaults to None.
+        response_text (str, optional): The response message text. Defaults to None.
+
+    Returns:
+        The updated document if successful. Otherwise, returns None.
     """
     try:
         document = db[collection].find_one_and_update(
@@ -157,8 +223,8 @@ async def update_single_document(
         return None
     if document:
         printlog(f"Successfully updated document in [{collection}]:")
-        if message and send_text:
-            await message.channel.send(send_text)
+        if message and response_text:
+            await message.channel.send(response_text)
         return document
     else:
         printlog(

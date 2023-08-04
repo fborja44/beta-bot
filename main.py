@@ -128,7 +128,7 @@ class MyBot(discord.Client):
         db_guild: dict = await _guild.find_guild(guild.id)
         if channel.id in db_guild["config"]["tournament_channels"]:
             await _channel.delete_tournament_channel_db(db_guild, channel.id)
-            
+
 
 intents = discord.Intents.default()
 intents.members = True

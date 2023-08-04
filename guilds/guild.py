@@ -11,22 +11,34 @@ GUILDS = "guilds"
 
 
 async def get_all_guilds():
-    """
-    Returns all guilds in the database.
+    """Returns all guilds in the database.
+
+    Returns:
+        A list of all guild documents in the database.
     """
     return await mdb.find_all(GUILDS)
 
 
 async def find_guild(guild_id: int):
-    """
-    Finds a guild in the database.
+    """Finds a guild in the database.
+
+    Args:
+        guild_id (int): The target guild id.
+
+    Returns:
+        The guild document if found. None otherwise.
     """
     return await mdb.find_document({"guild_id": guild_id}, GUILDS)
 
 
 async def find_add_guild(guild: Guild):
-    """
-    Finds a guild in the database or adds it if it does not exist.
+    """Finds a guild in the database or adds it if it does not exist.
+
+    Args:
+        guild (Guild): The target discord guild.
+
+    Returns:
+        The guild document if found. If not found, returns the new guild document. On error, returns None.
     """
     guild_id = guild.id
     db_guild = await find_guild(guild_id)
@@ -37,8 +49,13 @@ async def find_add_guild(guild: Guild):
 
 
 async def find_update_add_guild(guild: Guild):
-    """
-    Finds a guild in the database or adds it if it does not exist.
+    """Finds a guild in the database and updates it or adds it if it does not exist.
+
+    Args:
+        guild (Guild): The target discord guild.
+
+    Returns:
+        The updated guild document if found. If not found, returns the new guild document. On error, returns None.
     """
     guild_id = guild.id
     db_guild = await find_guild(guild_id)
@@ -49,8 +66,13 @@ async def find_update_add_guild(guild: Guild):
 
 
 async def add_guild(guild: Guild):
-    """
-    Creates a guild document in the database
+    """Creates a new guild document in the database.
+
+    Args:
+        guild (Guild): The target discord guild to add.
+
+    Returns:
+        The new guild document if successful. Otherwise, None.
     """
     new_guild = {
         "guild_id": guild.id,
@@ -77,8 +99,13 @@ async def add_guild(guild: Guild):
 
 
 async def update_guild(guild: Guild):
-    """
-    Updates a guild document in the database.
+    """Updates a guild document in the database.
+
+    Args:
+        guild (Guild): The target discord guild to update.
+
+    Returns:
+        The updated guild document if successful. Otherwise, None.
     """
     db_guild = await mdb.update_single_document(
         {"guild_id": guild.id}, {"$set": {"name": guild.name}}, GUILDS
@@ -91,8 +118,14 @@ async def update_guild(guild: Guild):
 
 
 async def set_guild(guild_id: int, new_guild: dict):
-    """
-    Sets a guild document in the database to the specified document
+    """Sets a guild document in the database to the specified document
+
+    Args:
+        guild_id (int): The target guild id.
+        new_guild (dict): The new guild document.
+
+    Returns:
+        The new guild document if successful. Otherwise, None.
     """
     db_guild = await mdb.update_single_document(
         {"guild_id": guild_id}, {"$set": new_guild}, GUILDS
@@ -105,8 +138,13 @@ async def set_guild(guild_id: int, new_guild: dict):
 
 
 async def delete_guild(guild: Guild):
-    """
-    Deletes a guild document in the database.
+    """Deletes a guild document in the database.
+
+    Args:
+        guild (Guild): The target discord guild to delete.
+
+    Returns:
+        The result object if successful. Otherwise, None.
     """
     delete_result = await mdb.delete_document({"guild_id": guild.id}, GUILDS)
     if delete_result:
@@ -117,8 +155,15 @@ async def delete_guild(guild: Guild):
 
 
 async def push_to_guild(guild: Guild, target_array: str, document: dict):
-    """
-    Adds new document to a guild as a subdocument.
+    """Adds a new subdocument to a guild.
+
+    Args:
+        guild (Guild): The target guild to update.
+        target_array (str): The target subdocument collection.
+        document (dict): The document to add.
+
+    Returns:
+        The added document if successful. Otherwise, None.
     """
     guild_id = guild.id
     document_id = document["id"]
@@ -140,8 +185,15 @@ async def push_to_guild(guild: Guild, target_array: str, document: dict):
 
 
 async def pull_from_guild(guild: Guild, target_array: str, document: dict):
-    """
-    Removes a subdocument from a guild.
+    """Removes a subdocument from a guild.
+
+    Args:
+        guild (Guild): The target gulid to update.
+        target_array (str): The target subdocument collection
+        document (dict): The document to remove.
+
+    Returns:
+        The removed document if successful. Otherwise, None.
     """
     guild_id = guild.id
     document_id = document["id"]

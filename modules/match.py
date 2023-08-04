@@ -33,8 +33,14 @@ from views.voting_view import VotingView
 
 
 def find_match(db_tournament: dict, match_id: int):
-    """
-    Retrieves and returns a match document from the database (if it exists).
+    """Retrieves and returns a match document from the database (if it exists).
+
+    Args:
+        db_tournament (dict): A tournament document.
+        match_id (int): The target match id.
+
+    Returns:
+        The match document if found. Otherwise, None.
     """
     tournament_matches = db_tournament["matches"]
     result = [match for match in tournament_matches if match["id"] == match_id]
@@ -44,8 +50,14 @@ def find_match(db_tournament: dict, match_id: int):
 
 
 def find_match_by_challonge_id(db_tournament: dict, challonge_id: int):
-    """
-    Retrieves and returns a match document from the database (if it exists).
+    """Retrieves and returns a match document from the database (if it exists).
+
+    Args:
+        db_tournament (dict): A tournament database document.
+        challonge_id (int): The target match challonge id.
+
+    Returns:
+        The match document if found. Otherwise, None.
     """
     tournament_matches = db_tournament["matches"]
     result = [
@@ -57,15 +69,25 @@ def find_match_by_challonge_id(db_tournament: dict, challonge_id: int):
 
 
 async def create_match(
-    self: Client,
+    client: Client,
     tournament_thread: Thread,
     db_guild: dict,
     db_tournament: dict,
-    challonge_match,
-    db: bool = True,
+    challonge_match: dict,
+    db_flag: bool = True,
 ):
-    """
-    Creates a new match in a tournament.
+    """Creates a new match document for a tournament and sends the match message in the tournament thread.
+
+    Args:
+        client (Client): The Discord bot client user.
+        tournament_thread (Thread): The tournament thread.
+        db_guild (dict): The guild database document.
+        db_tournament (dict): The tournament document.
+        challonge_match (dict): The challonge match dictionary.
+        db (bool, optional): A flag to determine whether to save the new match to the database. Defaults to True.
+
+    Returns:
+        The new match document if successful. Otherwise, None.
     """
     tournament_title = db_tournament["title"]
     # Create match message and embed
@@ -94,11 +116,11 @@ async def create_match(
         f"<@{player1['id']}> vs <@{player2['id']}>", embed=embed, view=button_view
     )
 
-    self.add_view(button_view, message_id=match_message.id)
+    client.add_view(button_view, message_id=match_message.id)
 
     # Add match document to database
     new_match["id"] = match_message.id
-    if db:
+    if db_flag:
         try:
             db_guild, db_tournament = await _tournament.add_to_tournament(
                 db_guild["guild_id"], tournament_title, MATCHES, new_match
@@ -118,8 +140,17 @@ async def create_match(
 async def delete_match(
     tournament_thread: Thread, db_guild: dict, db_tournament: dict, match_id: int
 ):
-    """
-    Deletes a match, and recursively deletes all dependent matches.
+    """Deletes a match, and recursively deletes all dependent matches.
+    First deletes the match from the database, then attempts to delete the match message.
+
+    Args:
+        tournament_thread (Thread): The tournament thread.
+        db_guild (dict): The guild database document.
+        db_tournament (dict): The tournament database document
+        match_id (int): _description_
+
+    Returns:
+        _type_: _description_
     """
     guild: Guild = tournament_thread.guild
     guild_id = guild.id
@@ -170,10 +201,15 @@ async def delete_match(
     return (db_guild, db_tournament)
 
 
-async def vote_match_button(interaction: Interaction, button: Button):
-    """
-    Reports the winner for a tournament match using buttons.
-    button_id is expected to be 1️⃣ or 2️⃣.
+async def vote_match_button(interaction: Interaction, button: Button) -> bool:
+    """Handles match reporting from Discord view buttons.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        button (Button): The button from which the interaction was made.
+
+    Returns:
+        bool: True if vote is successful. Otherwise, False.
     """
     channel: TextChannel = interaction.channel
     guild: Guild = interaction.guild
@@ -208,9 +244,16 @@ async def vote_match_button(interaction: Interaction, button: Button):
     )
 
 
-async def vote_match(interaction: Interaction, match_challonge_id: int, vote: str):
-    """
-    Vote for a match using a command.
+async def vote_match(interaction: Interaction, match_challonge_id: int, vote: str) -> bool:
+    """Handles voting for a match using an app command.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        match_challonge_id (int): The challonge id for the target match.
+        vote (str): The vote to record. Either 1️⃣, 2️⃣, or <@user_id>
+
+    Returns:
+        bool: True if vote is successful. Otherwise, False.
     """
     guild: Guild = interaction.guild
     channel: TextChannel = interaction.channel
@@ -241,15 +284,29 @@ async def vote_match(interaction: Interaction, match_challonge_id: int, vote: st
 
 async def record_vote(
     interaction: Interaction,
-    vote_emoji: str,
+    vote_emote: str,
     match_message: Message,
     db_guild: dict,
     db_match: dict,
     db_tournament: dict = None,
 ):
-    """
-    Main function for voting on match results by buttons.
+    """Main function for voting on match results by buttons.
     Used for matches or challenges.
+    Updates the match in the database and edits the embed message to reflect votes from players.
+    Only the participants in the match are able to vote on that match.
+    
+    If db_tournament is not provided, the match is a challenge.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        vote_emote (str): The vote emoji string. Either 1️⃣ or 2️⃣.
+        match_message (Message): The Discord message for the match.
+        db_guild (dict): The guild database document.
+        db_match (dict): The target match database document.
+        db_tournament (dict, optional): The tournament database document. Defaults to None.
+
+    Returns:
+        True if successful. Otherwise, False.
     """
     match_type = "match" if db_tournament else "challenge"
     match_id = db_match["id"]
@@ -277,11 +334,11 @@ async def record_vote(
         return False
 
     # Check if switching vote
-    switched = voter["vote"] is not None and voter["vote"] != vote_emoji
+    switched = voter["vote"] is not None and voter["vote"] != vote_emote
 
     # Record vote or remove vote
-    if voter["vote"] != vote_emoji:
-        vote = vote_emoji
+    if voter["vote"] != vote_emote:
+        vote = vote_emote
         action = "Added" if not voter["vote"] else "Changed"
     else:
         if opponent["vote"] is not None:
@@ -393,7 +450,7 @@ async def record_vote(
 
 
 async def report_match(
-    self: Client,
+    client: Client,
     match_message: Message,
     db_guild: dict,
     db_tournament: dict,
@@ -401,8 +458,19 @@ async def report_match(
     winner_emote: str,
     is_dq: bool = False,
 ):
-    """
-    Reports a match winner and fetches the next matches that have not yet been called.
+    """Reports a match winner and fetches the next matches that have not yet been called.
+
+    Args:
+        client (Client): The Discord bot client user.
+        match_message (Message): The match Discord message.
+        db_guild (dict): The guild database document.
+        db_tournament (dict): The tournament database document.
+        db_match (dict): The target match database document.
+        winner_emote (str): The emote that represents the winner. Either 1️⃣ or 2️⃣.
+        is_dq (bool, optional): Flag to determine if the result is a disqualification. Defaults to False.
+
+    Returns:
+        _type_: _description_
     """
     tournament_title = db_tournament["title"]
     tournament_challonge_id = db_tournament["challonge"]["id"]
@@ -468,7 +536,7 @@ async def report_match(
     
     # Call new open matches
     count = await call_open_matches(
-        self, match_message.channel, db_guild, db_tournament
+        client, match_message.channel, db_guild, db_tournament
     )
     
     # Check if was last match in the tournament
@@ -478,6 +546,7 @@ async def report_match(
         )
         
     # Update tournament embed image
+    # TODO: Fix image functionality
     try:
         tournament_channel = await match_message.guild.fetch_channel(
             db_tournament["channel_id"]
@@ -502,12 +571,21 @@ async def report_match(
 
 
 async def call_open_matches(
-    self: Client, tournament_thread: Thread, db_guild: dict, db_tournament: dict
-):
+    client: Client, tournament_thread: Thread, db_guild: dict, db_tournament: dict
+) -> int:
+    """Calls newly opened matches from challonge.
+    Returns 
+
+    Args:
+        client (Client): The Discord bot client user.
+        tournament_thread (Thread): The tournament Discord thread.
+        db_guild (dict): The guild database document.
+        db_tournament (dict): The target tournament database document.
+
+    Returns:
+        int: The number of new open matches if successful. Otherwise, returns -1.
     """
-    Calls newly opened matches from challonge.
-    Returns the number of new open matches, or -1 if failed.
-    """
+    # Fetch new open matches from challonge.
     try:
         challonge_matches = challonge.matches.index(
             db_tournament["challonge"]["id"], state="open"
@@ -515,6 +593,7 @@ async def call_open_matches(
     except Exception as e:
         printlog("Failed to get new matches.", e)
         return -1
+    
     for challonge_match in challonge_matches:
         # Check if match has already been called (in database)
         try:
@@ -524,13 +603,15 @@ async def call_open_matches(
         except Exception as e:
             printlog("Failed to check match in database.", e)
             return -1
+        
         # Get match message too
         if check_match:
             continue
         new_match = await create_match(
-            self, tournament_thread, db_guild, db_tournament, challonge_match
+            client, tournament_thread, db_guild, db_tournament, challonge_match
         )
         db_tournament["matches"].append(new_match)
+        
         # Add new match message_id to dependent matches' next_matches list
         try:
             db_match1 = find_match_by_challonge_id(
@@ -572,10 +653,17 @@ async def call_open_matches(
 
 async def override_match_result(
     interaction: Interaction, match_challonge_id: int, winner: str
-):
-    """
-    Overrides the results of a match. The status of the match does not matter.
+) -> bool:
+    """Overrides the results of a match. The status of the match does not matter.
     Only usable by tournament creator or tournament manager
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        match_challonge_id (int): The challonge id for the target match.
+        winner (str): The new winner of the set. Either 1️⃣ or 2️⃣, or <@user_id>.
+
+    Returns:
+        bool: True if override is successful. Otherwise, False.
     """
     guild: Guild = interaction.guild
     channel: TextChannel = interaction.channel
@@ -586,12 +674,14 @@ async def override_match_result(
     )
     if not db_tournament or not winner_emote or not db_match:
         return False
+    
     # Check if in valid channel
     tournament_thread = await _tournament.valid_tournament_thread(
         db_tournament, interaction
     )
     if not tournament_thread:
         return False
+    
     # Check if actually changing the winner
     if (
         db_match["winner_emote"] is not None
@@ -601,6 +691,7 @@ async def override_match_result(
             "Match report failed; Winner is the same.", ephemeral=True
         )
         return False
+    
     # Delete newly created matches
     next_matches = db_match["next_matches"]
     if len(next_matches) > 0:
@@ -608,6 +699,7 @@ async def override_match_result(
             db_guild, db_tournament = await delete_match(
                 tournament_thread, db_guild, db_tournament, next_match_id
             )
+    
     # Report match
     match_message = await channel.fetch_message(db_match["id"])
     try:
@@ -635,14 +727,24 @@ async def override_match_result(
     return True
 
 
-async def repair_match(interaction: Interaction, tournament_title: str = ""):
-    """
-    Recalls all incomplete matches whose messages are missing (i.e. have been deleted).
+async def repair_match(interaction: Interaction, tournament_title: str = "") -> bool:
+    """Re-calls all incomplete matches whose messages are missing (i.e. have been deleted).
     Only works if the match exists in the database (i.e. has been called previously).
+    
+    If the tournament title is not provided, defaults to the guild's current active tournament, 
+    or the most recently created tournament.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        tournament_title (str, optional): The title of the target match. Defaults to "".
+
+    Returns:
+        bool: True if successfully repaired. Otherwise, False.
     """
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
+    
     # Validate arguments
     try:
         (
@@ -655,6 +757,7 @@ async def repair_match(interaction: Interaction, tournament_title: str = ""):
         )
     except ValueError:
         return False
+    
     # Go through all matches and check if they need to be recalled
     printlog(
         f"User '{user.name}#{user.discriminator}' called match medic for tournament '{db_tournament['title']}'"
@@ -664,6 +767,7 @@ async def repair_match(interaction: Interaction, tournament_title: str = ""):
         # Check if match has already been completed
         if db_match["completed"]:
             continue
+        
         # Check if match message exists
         try:
             await tournament_thread.fetch_message(db_match["id"])
@@ -671,6 +775,7 @@ async def repair_match(interaction: Interaction, tournament_title: str = ""):
             ch_match = challonge.matches.show(
                 db_tournament["challonge"]["id"], db_match["challonge_id"]
             )
+            
             # Re-call the match in discord
             new_match = await create_match(
                 interaction.client,
@@ -678,12 +783,14 @@ async def repair_match(interaction: Interaction, tournament_title: str = ""):
                 db_guild,
                 db_tournament,
                 ch_match,
-                db=False,
+                db_flag=False,
             )
+            
             # Update match id in database
             await set_match(guild.id, db_tournament, new_match)
             print(f"Repaired match ['id'='{db_match['id']}'].")
             count += 1
+    
     await tournament_thread.send(embed=create_repair_embed(interaction, count))
     await interaction.followup.send(
         f"Successfully repaired {count} matches.", ephemeral=True
@@ -691,13 +798,20 @@ async def repair_match(interaction: Interaction, tournament_title: str = ""):
     return True
 
 
-async def reset_match(interaction: Interaction, match_challonge_id: int):
-    """
-    Resets a match and recalls the message.
+async def reset_match(interaction: Interaction, match_challonge_id: int) -> True:
+    """Resets a match on challonge and in the database and re-calls the message.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        match_challonge_id (int): The challonge id of the target match.
+
+    Returns:
+        bool: True if successfully reset. Otherwise, False.
     """
     guild: Guild = interaction.guild
     user: Member = interaction.user
     db_guild = await _guild.find_guild(guild.id)
+    
     # Validate arguments
     try:
         (
@@ -708,15 +822,18 @@ async def reset_match(interaction: Interaction, match_challonge_id: int):
         ) = await _tournament.validate_arguments_tournament(interaction, db_guild)
     except ValueError:
         return False
+    
     # Fetch match
     db_match = find_match_by_challonge_id(db_tournament, match_challonge_id)
     if not db_match:
         await interaction.followup.send(f"`match_id` is invalid.", ephemeral=True)
         return False
+    
     # Check if valid match
     if not db_match["completed"]:
         await interaction.followup.send(f"This match has not been completed.")
         return False
+    
     # Reset match on challonge
     try:
         challonge.matches.reopen(
@@ -732,10 +849,12 @@ async def reset_match(interaction: Interaction, match_challonge_id: int):
         )
         await interaction.followup.send("Failed to reset match on Challonge.")
         return False
+    
     # Delete match (and others that come out of it)
     db_guild, db_tournament = await delete_match(
         tournament_thread, db_guild, db_tournament, db_match["id"]
     )
+    
     # Recreate match
     await create_match(
         interaction.client, tournament_thread, db_guild, db_tournament, ch_match
@@ -744,6 +863,7 @@ async def reset_match(interaction: Interaction, match_challonge_id: int):
         f"User '{user.name}#{user.discriminator}' reset match ['id'='{db_match['id']}'] in tournament '{tournament_title}'."
     )
     await tournament_thread.send(embed=create_reset_embed(interaction, db_match))
+    
     # Update tournament embed
     try:
         tournament_channel = await tournament_thread.guild.fetch_channel(
@@ -783,8 +903,17 @@ async def update_player(
     updated_player1=None,
     updated_player2=None,
 ):
-    """
-    Updates the players in a match.
+    """Updates the players in a match.
+
+    Args:
+        guild_id (int): The guild database document.
+        db_tournament (dict): The tournament database document.
+        match_id (int): The target match id.
+        updated_player1 (_type_, optional): The updated player1 document. Defaults to None.
+        updated_player2 (_type_, optional): The updated player2 document. Defaults to None.
+
+    Returns:
+        _type_: _description_
     """
     tournament_title = db_tournament["title"]
     match_index = _tournament.find_index_in_tournament(
@@ -800,8 +929,15 @@ async def update_player(
 
 
 async def set_match(guild_id: int, db_tournament: dict, db_match: dict):
-    """
-    Updates a match document in the database.
+    """Sets the targeted match document to a new match document in the database.
+
+    Args:
+        guild_id (int): The target guild id.
+        db_tournament (dict): The tournament database document.
+        db_match (dict): The updated match document.
+
+    Returns:
+        A pair of the updated guild document and updated tournament document.
     """
     tournament_title = db_tournament["title"]
     match_index = _tournament.find_index_in_tournament(
@@ -814,8 +950,16 @@ async def set_match(guild_id: int, db_tournament: dict, db_match: dict):
 async def fetch_tournament_and_match(
     interaction: Interaction, db_guild: dict, match_challonge_id: int
 ):
-    """
-    Returns the current active tournament and targeted match if they exist.
+    """Returns the current active tournament and targeted match if they exist.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        db_guild (dict): The guild database document.
+        match_challonge_id (int): The challonge id of the target match.
+
+    Returns:
+        A tuple containing the tournament database document and the match database document. 
+        Otherwise, returns a tuple of (None and None).
     """
     # Fetch active tournament
     db_tournament = _tournament.find_active_tournament(db_guild)
@@ -824,6 +968,7 @@ async def fetch_tournament_and_match(
             f"There are currently no active tournaments.", ephemeral=True
         )
         return (None, None)
+    
     # Get match
     db_match = find_match_by_challonge_id(db_tournament, match_challonge_id)
     if not db_match:
@@ -835,8 +980,17 @@ async def fetch_tournament_and_match(
 async def parse_vote(
     interaction: Interaction, db_guild: dict, match_challonge_id: int, vote: str
 ):
-    """
-    Parses a vote argument that can either be an emote (1 or 2) or a player name.
+    """Parses a vote argument that can either be an emote (1 or 2) or a player mention.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        db_guild (dict): The guild database document.
+        match_challonge_id (int): The challonge id of the target match.
+        vote (str): The vote to validate.
+
+    Returns:
+        A tuple of the vote emote, the tournament document, and the match docuemnt if successful.
+        Otherwise, returns a tuple of (None, None, and None).
     """
     # Fetch active tournament and targeted match
     db_tournament, db_match = await fetch_tournament_and_match(
@@ -845,7 +999,7 @@ async def parse_vote(
     if not db_tournament or not db_match:
         return (None, None, None)
     # Check vote emote
-    vote_emote = valid_vote_emote(vote)
+    vote_emote = validate_vote_emote(vote)
     # Find by name if applicable
     if not vote_emote:
         player1_id = db_match["player1"]["id"]
@@ -870,9 +1024,14 @@ async def parse_vote(
     return (vote_emote, db_tournament, db_match)
 
 
-def valid_vote_emote(vote: str):
-    """
-    Checks if a vote string can be validated into an emote. Returns '1️⃣', '2️⃣' if valid, None otherwise.
+def validate_vote_emote(vote: str):
+    """Checks if a vote string can be validated into an emote. 
+
+    Args:
+        vote (str): The vote to validate.
+
+    Returns:
+        Returns '1️⃣', '2️⃣' if valid. Otherwise, None.
     """
     valid1 = ["1", "1️⃣"]
     valid2 = ["2", "2️⃣"]
@@ -889,9 +1048,15 @@ def valid_vote_emote(vote: str):
 #######################
 
 
-def create_match_embed(db_tournament: dict, db_match: dict):
-    """
-    Creates embed object to include in match message.
+def create_match_embed(db_tournament: dict, db_match: dict) -> Embed:
+    """Creates embed object to include in match message.
+
+    Args:
+        db_tournament (dict): The tournament database document.
+        db_match (dict): The target match database document.
+
+    Returns:
+        Embed: The generated match embed in the ready state.
     """
     tournament_title = db_tournament["title"]
     match_challonge_id = db_match["challonge_id"]
@@ -943,9 +1108,15 @@ def create_match_embed(db_tournament: dict, db_match: dict):
     return embed
 
 
-def edit_match_embed_report(embed: Embed, db_match: dict):
-    """
-    Updates embed object for disputes.
+def edit_match_embed_report(embed: Embed, db_match: dict) -> Embed:
+    """Updates a match embed object for reporting.
+
+    Args:
+        embed (Embed): The target match embed.
+        db_match (dict): the target match database document.
+
+    Returns:
+        Embed: The updated embed.
     """
     player1_id = db_match["player1"]["id"]
     player2_id = db_match["player2"]["id"]
@@ -960,9 +1131,14 @@ def edit_match_embed_report(embed: Embed, db_match: dict):
     return embed
 
 
-def edit_match_embed_dispute(embed: Embed):
-    """
-    Updates embed object for disputes.
+def edit_match_embed_dispute(embed: Embed) -> Embed:
+    """Updates a match embed object for disputes.
+
+    Args:
+        embed (Embed): The match embed to update.
+
+    Returns:
+        Embed: The updated embed.
     """
     embed.add_field(
         name="🛑 Result Dispute 🛑",
@@ -979,11 +1155,21 @@ def edit_match_embed_confirmed(
     player2: dict,
     winner_emote: str,
     is_dq: bool = False,
-):
-    """
-    Updates embed object for confirmed match.
+) -> Embed:
+    """Updates the embed for a confirmed match.
     For tournament tournament matches, match_id is the challonge_id.
     For 1v1 challenge matches, match_id is the id (message_id).
+
+    Args:
+        embed (Embed): The match or challenge embed to update.
+        match_id (int): The target match id.
+        player1 (dict): The player1 database document.
+        player2 (dict): The player2 database document.
+        winner_emote (str): A emote string of the winner. Either 1️⃣ or 2️⃣.
+        is_dq (bool, optional): A flag to determine if the result was a disqualification. Defaults to False.
+
+    Returns:
+        Embed: The updated embed.
     """
     time = datetime.now(tz=pytz.timezone("US/Eastern")).strftime("%#I:%M %p %Z")
     player1_id = player1["id"]
@@ -1014,10 +1200,19 @@ def edit_match_embed_confirmed(
     return embed
 
 
-def create_repair_embed(interaction: Interaction, num_matches: int):
+def create_repair_embed(interaction: Interaction, num_matches: int) -> Embed:
+    """Creates an embed for a successful match repair command.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        num_matches (int): The number of matches repaired.
+
+    Returns:
+        Embed: The repair embed object.
+    """
     user = interaction.user
     embed = Embed(
-        title=f"👨‍⚕️ Match Medic! Fixed {num_matches} matches.", color=WOOP_PURPLE
+        title=f"👨‍⚕️ Match Medic: Fixed {num_matches} matches.", color=WOOP_PURPLE
     )
     embed.set_footer(
         text=f"{user.name}#{user.discriminator} used {full_command(interaction.command)}"
@@ -1025,7 +1220,16 @@ def create_repair_embed(interaction: Interaction, num_matches: int):
     return embed
 
 
-def create_reset_embed(interaction: Interaction, db_match: dict):
+def create_reset_embed(interaction: Interaction, db_match: dict) -> Embed:
+    """Creates an embed for a successful match reset.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        db_match (dict): The target match database document.
+
+    Returns:
+        Embed: The reset embed object.
+    """
     match_id = db_match["id"]
     user = interaction.user
     embed = Embed(title=f"Match {match_id} has been reset.", color=WOOP_PURPLE)
@@ -1035,7 +1239,17 @@ def create_reset_embed(interaction: Interaction, db_match: dict):
     return embed
 
 
-def create_report_embed(interaction: Interaction, db_match: dict, db_winner: dict):
+def create_report_embed(interaction: Interaction, db_match: dict, db_winner: dict) -> Embed:
+    """Creates an embed for a reported match.
+
+    Args:
+        interaction (Interaction): The Discord command interaction.
+        db_match (dict): The target match database document.
+        db_winner (dict): The database document of the winning player.
+
+    Returns:
+        Embed: The report embed object.
+    """
     match_id = db_match["id"]
     winner_id = db_winner["id"]
     winner_emote = db_match["winner_emote"]
@@ -1049,9 +1263,16 @@ def create_report_embed(interaction: Interaction, db_match: dict, db_winner: dic
     return embed
 
 
-def get_round_name(db_tournament: dict, match_id: int, round: int):
-    """
-    Returns string value of round number based on number of rounds in a tournament.
+def get_round_name(db_tournament: dict, match_id: int, round: int) -> str:
+    """Returns string value of round number based on number of rounds in a tournament.
+
+    Args:
+        db_tournament (dict): The tournament database document.
+        match_id (int): The target match id.
+        round (int): The round number.
+
+    Returns:
+        str: The round name as a string.
     """
     num_rounds = db_tournament["num_rounds"]
     if round > 0:
